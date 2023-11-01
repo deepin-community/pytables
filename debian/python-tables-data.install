@@ -1,0 +1,5 @@
+usr/lib/python3*/dist-packages/tables/tests/*.h5 usr/share/python-tables/tests
+usr/lib/python3*/dist-packages/tables/tests/*.mat usr/share/python-tables/tests
+usr/lib/python3*/dist-packages/tables/nodes/tests/*.h5 usr/share/python-tables/nodes/tests
+usr/lib/python3*/dist-packages/tables/nodes/tests/*.xbm usr/share/python-tables/nodes/tests
+usr/lib/python3*/dist-packages/tables/nodes/tests/*.dat usr/share/python-tables/nodes/tests

@@ -1,0 +1,9 @@
+usr/lib/python3*/dist-packages/tables/*.py
+usr/lib/python3*/dist-packages/tables/*.pxd
+usr/lib/python3*/dist-packages/tables/misc/*.py
+usr/lib/python3*/dist-packages/tables/nodes/*.py
+usr/lib/python3*/dist-packages/tables/nodes/tests/*.py
+usr/lib/python3*/dist-packages/tables/scripts/*.py
+usr/lib/python3*/dist-packages/tables/tests/*.py
+usr/lib/python3*/dist-packages/tables*.*-info
+usr/bin/*

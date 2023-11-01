@@ -1,0 +1,39 @@
+From: Antonio Valentino <antonio.valentino@tiscali.it>
+Date: Thu, 17 Aug 2023 10:38:24 +0000
+Subject: Compatibility with numexpr v2.8.5
+
+Origin: mostly upstream 1a235490ebe1a138da1139cfa19829b5f0a2af37
+Author: Antonio Valentino
+Forwarded: https://github.com/PyTables/PyTables/issues/1044
+---
+ tables/tests/test_queries.py | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/tables/tests/test_queries.py b/tables/tests/test_queries.py
+index b9406a3..d48096f 100644
+--- a/tables/tests/test_queries.py
++++ b/tables/tests/test_queries.py
+@@ -640,14 +640,20 @@ class ScalarTableUsageTestCase(ScalarTableMixin, BaseTableUsageTestCase):
+     def test_unsupported_object(self):
+         """Using a condition with an unsupported object."""
+ 
+-        self.assertRaises(TypeError, self.table.where, '[]')
++        self.assertRaises(
++            (TypeError, ValueError), self.table.where, '[]'
++        )
+         self.assertRaises(TypeError, self.table.where, 'obj', {'obj': {}})
+-        self.assertRaises(TypeError, self.table.where, 'c_bool < []')
++        self.assertRaises(
++            (TypeError, ValueError), self.table.where, 'c_bool < []'
++        )
+ 
+     def test_unsupported_syntax(self):
+         """Using a condition with unsupported syntax."""
+ 
+-        self.assertRaises(TypeError, self.table.where, 'c_bool[0]')
++        self.assertRaises(
++            (TypeError, ValueError), self.table.where, 'c_bool[0]'
++        )
+         self.assertRaises(TypeError, self.table.where, 'c_bool()')
+         self.assertRaises(NameError, self.table.where, 'c_bool.__init__')
+ 

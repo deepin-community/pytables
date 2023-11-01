@@ -1,0 +1,2 @@
+bench usr/share/doc/python-tables-doc
+.pybuild/docs/html usr/share/doc/python-tables-doc

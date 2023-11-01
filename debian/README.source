@@ -1,0 +1,42 @@
+README.source
+-------------
+
+The PyTables project provides two kinds of source packages:
+
+* the "official" source tarball also includes the pre-built HTML and PDF
+  documentation and is the available at
+
+  http://sourceforge.net/projects/pytables/files/pytables/
+
+  or
+
+  http://pypi.python.org/pypi/tables
+
+* the "pure source" distribution, instead, only includes sources for the
+  python package and extensions and for documentation (sphinx [1] based
+  documentation in reStructuredText format).
+  The "pure source" distribution is only available on GitHub and it is
+  generated from the source code repository tags:
+
+  https://github.com/PyTables/PyTables/releases
+
+The debian package for PyTables uses the "pure source" distribution in order
+to make it easier to manage stuffs related to sphinx [1] documentation
+management.
+
+The PyTables source tree includes an internal copy of c-blosc [2] and
+(starting from version 3.1) a copy of the zlib [3], lz4 [4] and snappy [5]
+compression libraries.
+Apart for c-blosc, for which no debian package is available at the moment,
+the debian package for PyTables does not use the internal copy of the
+compressors. It links the system version of that libraries.
+
+
+[1] http://sphinx-doc.org
+[2] http://blosc.org
+[3] http://www.zlib.net
+[4] http://code.google.com/p/lz4
+[5] http://code.google.com/p/snappy
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Wed, 05 Mar 2014 23:49:28 +0100
+

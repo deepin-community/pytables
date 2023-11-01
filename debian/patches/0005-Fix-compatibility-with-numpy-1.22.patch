@@ -1,0 +1,34 @@
+From: Antonio Valentino <antonio.valentino@tiscali.it>
+Date: Tue, 20 Dec 2022 21:09:47 +0000
+Subject: Fix compatibility with numpy 1.22
+
+See also https://github.com/PyTables/PyTables/issues/934.
+
+Forwarded: not-needed
+Applied-Upstream: https://github.com/PyTables/PyTables/commit/f3bfb0cc2508cd25e29408e25c8a06b211dd27e7
+---
+ tables/tests/test_expression.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tables/tests/test_expression.py b/tables/tests/test_expression.py
+index 502ae42..018d420 100644
+--- a/tables/tests/test_expression.py
++++ b/tables/tests/test_expression.py
+@@ -2,6 +2,7 @@
+ 
+ 
+ import numpy as np
++from numpy import testing as npt
+ 
+ import tables as tb
+ from tables.tests import common
+@@ -895,8 +896,7 @@ class FunctionsTestCase(common.TempFileMixin, common.PyTablesTestCase):
+         if common.verbose:
+             print("Computed expression:", repr(r1), r1.dtype)
+             print("Should look like:", repr(r2), r2.dtype)
+-        self.assertTrue(common.areArraysEqual(r1, r2),
+-                        "Evaluate is returning a wrong value.")
++        npt.assert_array_almost_equal_nulp(r1, r2)
+ 
+ 
+ # Test for EArrays with maindim != 0

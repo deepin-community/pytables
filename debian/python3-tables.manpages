@@ -1,0 +1,4 @@
+debian/ptdump.1
+debian/ptrepack.1
+debian/pt2to3.1
+debian/pttree.1

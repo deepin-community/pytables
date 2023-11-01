@@ -1,0 +1,28 @@
+From: Antonio Valentino <antonio.valentino@tiscali.it>
+Date: Fri, 23 Aug 2013 12:19:58 +0200
+Subject: use dynamic lib
+
+The setup script detects the static version of the lzo2 library instead of
+the dynamic version (that is now located in a multi-arch path).
+This causes a link error due to not relacable code (missing -fPIC flag
+at compile time)
+
+Now the dynamic version of the lzo2 library is located in a multiarch path so
+sthe setup script
+---
+ setup.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/setup.py b/setup.py
+index ab8f8e3..38797af 100755
+--- a/setup.py
++++ b/setup.py
+@@ -422,7 +422,7 @@ if __name__ == "__main__":
+ 
+     class PosixPackage(BasePackage):
+         _library_prefixes = ["lib"]
+-        _library_suffixes = [".so", ".dylib", ".a"]
++        _library_suffixes = [".so", ".dylib"]  # , ".a"]
+         _runtime_prefixes = _library_prefixes
+         _runtime_suffixes = [".so", ".dylib"]
+         _component_dirs = ["include", "lib", "lib64"]
