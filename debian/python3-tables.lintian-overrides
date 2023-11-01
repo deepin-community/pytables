@@ -1,0 +1,9 @@
+# scripts for entry points of support tools
+python3-tables: application-in-library-section python [usr/bin/pt*]
+library-package-name-for-application [usr/bin/pt*]
+
+# the python-tables-data package only contains common data
+python-package-depends-on-package-from-other-python-variant Depends: python-tables-data
+
+# False positive
+package-contains-documentation-outside-usr-share-doc [usr/lib/python3/dist-packages/tables-*.*-info/*]

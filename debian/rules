@@ -1,4 +1,47 @@
 #!/usr/bin/make -f
+# -*- makefile -*-
+
+#export DH_VERBOSE=1
+
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all # ,-pie
+
+ifneq ($(wildcard /usr/lib/$(DEB_HOST_MULTIARCH)/hdf5/serial/libhdf5.so),)
+export HDF5_DIR := /usr/lib/$(DEB_HOST_MULTIARCH)/hdf5/serial
+endif
+
+export DISABLE_AVX2=1 DISABLE_SSE2=1
+export PYBUILD_TEST_CUSTOM=1
+export PYBUILD_TEST_ARGS=\
+cd {build_dir} && \
+env PYTHONPATH={build_dir} \
+python{version} -c "import tables as tb, sys; sys.exit(tb.test(verbose=2))"
+export PYBUILD_AFTER_TEST=\
+$(RM) -r {build_dir}/tables/__pycache__ && \
+$(RM) -r {build_dir}/tables/*/__pycache__ && \
+$(RM) -r {build_dir}/tables/nodes/*/__pycache__
 
 %:
-	dh $@
+	dh $@ --buildsystem=pybuild
+
+execute_after_dh_auto_build: export http_proxy=127.0.0.1:9
+execute_after_dh_auto_build: export https_proxy=127.0.0.1:9
+execute_after_dh_auto_build:
+	$(RM) $(CURDIR)/.pybuild/cpython3_*/build/tables/*.pyx
+	$(RM) $(CURDIR)/.pybuild/cpython3_*/build/tables/*.c
+	$(RM) $(CURDIR)/.pybuild/cpython3_*/build/tables/*/*.c
+ifeq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
+	cd $(CURDIR)/.pybuild/cpython3_$(shell py3versions -vd)/build && \
+	env PYTHONPATH=. \
+	python3 -m sphinx -E -T -N -b html $(CURDIR)/doc/source $(CURDIR)/.pybuild/docs/html
+	rm -rf $(CURDIR)/.pybuild/docs/html/.doctrees
+	find $(CURDIR)/.pybuild/ -d -name __pycache__ -exec rm -rf {} +
+endif
+
+override_dh_strip:
+	dh_strip -ppython3-tables-lib
+
+override_dh_installchangelogs:
+	dh_installchangelogs -k RELEASE_NOTES.rst
+
+override_dh_compress:
+	dh_compress -X.txt -X.pdf -X.py -X.h5

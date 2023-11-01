@@ -1,0 +1,21 @@
+From: Antonio Valentino <antonio.valentino@tiscali.it>
+Date: Thu, 29 Jun 2017 05:31:26 +0000
+Subject: use local mathjax
+
+Forwarded: not-needed
+---
+ doc/source/conf.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/doc/source/conf.py b/doc/source/conf.py
+index ba95716..0bdeec5 100644
+--- a/doc/source/conf.py
++++ b/doc/source/conf.py
+@@ -206,3 +206,7 @@ extlinks = {
+ autodoc_member_order = "groupwise"
+ autoclass_content = "class"
+ autosummary_generate = []
++
++# -- Options for mathjax -----------------------------------------------------
++mathjax_path='file:///usr/share/javascript/mathjax/MathJax.js'
++

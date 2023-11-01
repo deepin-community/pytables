@@ -1,0 +1,14 @@
+Document: pytables
+Title: Debian pytables Manual
+Author: Francesc Alted, Ivan Vilata, Scott Prater, Vicent Mas, Tom Hedley,
+        Antonio Valentino, Jeffrey Whitaker, Anthony Scopatz, Andrea Bedini
+Abstract: This document includes the PyTables user manual and the
+ reference guide for developers.
+Section: Programming/Python
+
+Format: HTML
+Index: /usr/share/doc/python-tables-doc/html/index.html
+Files: /usr/share/doc/python-tables-doc/html/*.html
+
+Format: text
+Files: /usr/share/doc/python-tables-doc/html/_sources/*.txt
