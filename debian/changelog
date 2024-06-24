@@ -1,3 +1,40 @@
+pytables (3.9.2-2) unstable; urgency=medium
+
+  * debian/patches:
+    - New 0005-No-python-blosc2.patch (Closes: #1065120).
+  * Update dates in d/copyright.
+  * Set upstream metadata fields: Security-Contact.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sun, 07 Apr 2024 06:58:48 +0000
+
+pytables (3.9.2-1) unstable; urgency=medium
+
+  * New upstream release.
+  * debian/patches:
+    - Drop pathces applied upstream:
+      0005-Fix-compatibility-with-numpy-1.22.patch,
+      0006-Compatibility-with-sphinx-7.1.patch,
+      0007-Compatibility-with-numexpr-v2.8.5.patch,
+      0008-Python-3.12-compat.patch,
+      and 0009-Numpy-v1.25-compat.patch.
+    - Refresh remaining patches.
+  * debian/control:
+    - Build-depend on c-blosc2-dev.
+    - Add dependency on python3-cpuinfo.
+    - Versioned dependency on numexpt (>= 2.8.7).
+  * Update d/copyright.
+  * Update d/python3-tables.links.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sat, 30 Dec 2023 18:26:59 +0000
+
+pytables (3.7.0-10) unstable; urgency=medium
+
+  * debian/patches:
+    - New 0008-Python-3.12-compat.patch and 0009-Numpy-v1.25-compat.patch.
+      Closes: #1055579.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sun, 12 Nov 2023 09:40:05 +0000
+
 pytables (3.7.0-9) unstable; urgency=medium
 
   * debian/rules:

@@ -6,13 +6,44 @@ PyTables is a package for managing hierarchical datasets and designed
 to efficiently cope with extremely large amounts of data.
 
 """
+import os
+from ctypes import cdll
+from ctypes.util import find_library
+import platform
+
+
+# Load the blosc2 library, and if not found in standard locations,
+# try this directory (it should be automatically copied in setup.py).
+current_dir = os.path.dirname(__file__)
+platform_system = platform.system()
+blosc2_lib_hardcoded = "libblosc2"
+if platform_system == "Linux":
+    blosc2_lib_hardcoded += ".so"
+elif platform_system == "Darwin":
+    blosc2_lib_hardcoded += ".dylib"
+else:
+    blosc2_lib_hardcoded += ".dll"
+blosc2_found = False
+blosc2_search_paths = [blosc2_lib_hardcoded,
+                       os.path.join(current_dir, blosc2_lib_hardcoded),
+                       find_library("blosc2")]
+for blosc2_lib in blosc2_search_paths:
+    if blosc2_lib:
+        try:
+            cdll.LoadLibrary(blosc2_lib)
+        except OSError:
+            pass
+        else:
+            blosc2_found = True
+            break
+if not blosc2_found:
+    raise RuntimeError("Blosc2 library not found. "
+                       f"I looked for \"{', '.join(blosc2_search_paths)}\"")
 
 # Necessary imports to get versions stored on the cython extension
 from .utilsextension import get_hdf5_version as _get_hdf5_version
 
-
-__version__ = "3.7.0"
-"""The PyTables version number."""
+from ._version import __version__
 
 hdf5_version = _get_hdf5_version()
 """The underlying HDF5 library version number.
@@ -23,12 +54,20 @@ hdf5_version = _get_hdf5_version()
 
 from .utilsextension import (
     blosc_compcode_to_compname_ as blosc_compcode_to_compname,
+    blosc2_compcode_to_compname_ as blosc2_compcode_to_compname,
     blosc_get_complib_info_ as blosc_get_complib_info,
+    blosc2_get_complib_info_ as blosc2_get_complib_info,
 )
 
 from .utilsextension import (
-    blosc_compressor_list, is_hdf5_file, is_pytables_file, which_lib_version,
-    set_blosc_max_threads, silence_hdf5_messages,
+    blosc_compressor_list,
+    blosc2_compressor_list,
+    is_hdf5_file,
+    is_pytables_file,
+    which_lib_version,
+    set_blosc_max_threads,
+    set_blosc2_max_threads,
+    silence_hdf5_messages,
 )
 
 from .misc.enum import Enum
@@ -66,7 +105,8 @@ __all__ = [
     # Functions:
     'is_hdf5_file', 'is_pytables_file', 'which_lib_version',
     'copy_file', 'open_file', 'print_versions', 'test',
-    'split_type', 'restrict_flavors', 'set_blosc_max_threads',
+    'split_type', 'restrict_flavors',
+    'set_blosc_max_threads', 'set_blosc2_max_threads',
     'silence_hdf5_messages',
     # Helper classes:
     'IsDescription', 'Description', 'Filters', 'Cols', 'Column',
@@ -102,36 +142,13 @@ if 'Float16Atom' in locals():
     # float16 is new in numpy 1.6.0
     __all__.extend(('Float16Atom', 'Float16Col'))
 
+if 'Float96Atom' in locals():
+    __all__.extend(('Float96Atom', 'Float96Col'))
+    __all__.extend(('Complex192Atom', 'Complex192Col'))    # XXX check
 
-from .utilsextension import _broken_hdf5_long_double
-if not _broken_hdf5_long_double():
-    if 'Float96Atom' in locals():
-        __all__.extend(('Float96Atom', 'Float96Col'))
-        __all__.extend(('Complex192Atom', 'Complex192Col'))    # XXX check
-
-    if 'Float128Atom' in locals():
-        __all__.extend(('Float128Atom', 'Float128Col'))
-        __all__.extend(('Complex256Atom', 'Complex256Col'))    # XXX check
-
-else:
-
-    from . import atom as _atom
-    from . import description as _description
-    try:
-        del _atom.Float96Atom, _atom.Complex192Col
-        del _description.Float96Col, _description.Complex192Col
-        _atom.all_types.discard('complex192')
-        _atom.ComplexAtom._isizes.remove(24)
-    except AttributeError:
-        try:
-            del _atom.Float128Atom, _atom.Complex256Atom
-            del _description.Float128Col, _description.Complex256Col
-            _atom.all_types.discard('complex256')
-            _atom.ComplexAtom._isizes.remove(32)
-        except AttributeError:
-            pass
-    del _atom, _description
-del _broken_hdf5_long_double
+if 'Float128Atom' in locals():
+    __all__.extend(('Float128Atom', 'Float128Col'))
+    __all__.extend(('Complex256Atom', 'Complex256Col'))    # XXX check
 
 
 def get_pytables_version():

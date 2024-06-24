@@ -8,11 +8,12 @@ We are happy to announce PyTables @VERSION@.
 What's new
 ==========
 
-This is a minor version of PyTables.  The main feature added is that
-compatibility with Python 3.10, numpy 1.21 and HDF5 1.12 has been improved,
-while support for Python 3.5 has been dropped.
+This release of PyTables fixes some cases of Blosc2 NDim optimized slice
+reading which resulted in wrong data being returned.  Users of this
+feature are strongly recommended to upgrade.
 
-The CI infrastructure has been moved to GitHub Actions.
+Also, wheels are now built with thread-safe HDF5 support, which should
+simplify the concurrent reading of files.
 
 In case you want to know more in detail what has changed in this
 version, please refer to: http://www.pytables.org/release_notes.html

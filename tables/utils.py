@@ -66,7 +66,10 @@ def idx2long(index):
     """Convert a possible index into a long int."""
 
     try:
-        return int(index)
+        if hasattr(index, "item"):
+            return index.item()
+        else:
+            return int(index)
     except Exception:
         raise TypeError("not an integer type.")
 
@@ -140,11 +143,11 @@ def check_file_access(filename, mode='r'):
     if mode == 'r':
         # The file should be readable.
         if not os.access(path, os.F_OK):
-            raise OSError(f"``{path}`` does not exist")
+            raise FileNotFoundError(f"``{path}`` does not exist")
         if not path.is_file():
-            raise OSError(f"``{path}`` is not a regular file")
+            raise IsADirectoryError(f"``{path}`` is not a regular file")
         if not os.access(path, os.R_OK):
-            raise OSError(f"file ``{path}`` exists but it can not be read")
+            raise PermissionError(f"file ``{path}`` exists but it can not be read")
     elif mode == 'w':
         if os.access(path, os.F_OK):
             # Since the file is not removed but replaced,
@@ -154,11 +157,11 @@ def check_file_access(filename, mode='r'):
             # A new file is going to be created,
             # so the directory should be writable.
             if not os.access(path.parent, os.F_OK):
-                raise OSError(f"``{path.parent}`` does not exist")
+                raise FileNotFoundError(f"``{path.parent}`` does not exist")
             if not path.parent.is_dir():
-                raise OSError(f"``{path.parent}`` is not a directory")
+                raise NotADirectoryError(f"``{path.parent}`` is not a directory")
             if not os.access(path.parent, os.W_OK):
-                raise OSError(
+                raise PermissionError(
                     f"directory ``{path.parent}`` exists but it can not be "
                     f"written"
                 )
@@ -170,7 +173,7 @@ def check_file_access(filename, mode='r'):
     elif mode == 'r+':
         check_file_access(path, 'r')
         if not os.access(path, os.W_OK):
-            raise OSError(f"file ``{path}`` exists but it can not be written")
+            raise PermissionError(f"file ``{path}`` exists but it can not be written")
     else:
         raise ValueError(f"invalid mode: {mode!r}")
 
@@ -207,7 +210,7 @@ def lazyattr(fget):
     >>> del obj.attribute
     Traceback (most recent call last):
       ...
-    AttributeError: can't delete attribute
+    AttributeError: ...
 
     .. warning::
 

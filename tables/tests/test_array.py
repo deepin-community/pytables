@@ -653,7 +653,7 @@ class UnalignedAndComplexTestCase(common.TempFileMixin,
         b = self.root.somearray.read()
 
         # Get an array to be compared in the correct byteorder
-        c = a.newbyteorder(byteorder)
+        c = a.view(a.dtype.newbyteorder(byteorder))
 
         # Compare them. They should be equal.
         if not common.allequal(c, b) and common.verbose:
@@ -774,17 +774,17 @@ class UnalignedAndComplexTestCase(common.TempFileMixin,
         # Save an array with the reversed byteorder on it
         a = np.arange(25, dtype=np.int32).reshape(5, 5)
         a = a.byteswap()
-        a = a.newbyteorder()
+        a = a.view(a.dtype.newbyteorder())
         array = self.h5file.create_array(
             self.h5file.root, 'array', a, "byteorder (int)")
         # Read a subarray (got an array with the machine byteorder)
         b = array[2:4, 3:5]
         b = b.byteswap()
-        b = b.newbyteorder()
+        b = b.view(b.dtype.newbyteorder())
         # Set this subarray back to the array
         array[2:4, 3:5] = b
         b = b.byteswap()
-        b = b.newbyteorder()
+        b = b.view(b.dtype.newbyteorder())
         # Set this subarray back to the array
         array[2:4, 3:5] = b
         # Check that the array is back in the correct byteorder
@@ -802,17 +802,17 @@ class UnalignedAndComplexTestCase(common.TempFileMixin,
         # Save an array with the reversed byteorder on it
         a = np.arange(25, dtype=np.float64).reshape(5, 5)
         a = a.byteswap()
-        a = a.newbyteorder()
+        a = a.view(a.dtype.newbyteorder())
         array = self.h5file.create_array(
             self.h5file.root, 'array', a, "byteorder (float)")
         # Read a subarray (got an array with the machine byteorder)
         b = array[2:4, 3:5]
         b = b.byteswap()
-        b = b.newbyteorder()
+        b = b.view(b.dtype.newbyteorder())
         # Set this subarray back to the array
         array[2:4, 3:5] = b
         b = b.byteswap()
-        b = b.newbyteorder()
+        b = b.view(b.dtype.newbyteorder())
         # Set this subarray back to the array
         array[2:4, 3:5] = b
         # Check that the array is back in the correct byteorder
@@ -2031,8 +2031,9 @@ class PointSelectionTestCase(common.TempFileMixin, common.PyTablesTestCase):
             a = nparr[key]
             b = tbarr[key]
             self.assertTrue(
-                np.alltrue(a == b),
-                "NumPy array and PyTables selections does not match.")
+                np.all(a == b),
+                "NumPy array and PyTables selections does not match."
+            )
 
     def test01b_read(self):
         """Test for point-selections (read, integer keys)."""
@@ -2046,7 +2047,7 @@ class PointSelectionTestCase(common.TempFileMixin, common.PyTablesTestCase):
             a = nparr[key]
             b = tbarr[key]
             self.assertTrue(
-                np.alltrue(a == b),
+                np.all(a == b),
                 "NumPy array and PyTables selections does not match.")
 
     def test01c_read(self):
@@ -2100,7 +2101,7 @@ class PointSelectionTestCase(common.TempFileMixin, common.PyTablesTestCase):
             a = nparr[:]
             b = tbarr[:]
             self.assertTrue(
-                np.alltrue(a == b),
+                np.all(a == b),
                 "NumPy array and PyTables modifications does not match.")
 
     def test02b_write(self):
@@ -2118,7 +2119,7 @@ class PointSelectionTestCase(common.TempFileMixin, common.PyTablesTestCase):
             a = nparr[:]
             b = tbarr[:]
             self.assertTrue(
-                np.alltrue(a == b),
+                np.all(a == b),
                 "NumPy array and PyTables modifications does not match.")
 
     def test02c_write(self):
@@ -2136,7 +2137,7 @@ class PointSelectionTestCase(common.TempFileMixin, common.PyTablesTestCase):
             a = nparr[:]
             b = tbarr[:]
             self.assertTrue(
-                np.alltrue(a == b),
+                np.all(a == b),
                 "NumPy array and PyTables modifications does not match.")
 
 
@@ -2281,7 +2282,7 @@ class FancySelectionTestCase(common.TempFileMixin, common.PyTablesTestCase):
             a = nparr[key]
             b = tbarr[key]
             self.assertTrue(
-                np.alltrue(a == b),
+                np.all(a == b),
                 "NumPy array and PyTables selections does not match.")
 
     def test01b_read(self):
@@ -2333,8 +2334,9 @@ class FancySelectionTestCase(common.TempFileMixin, common.PyTablesTestCase):
             a = nparr[:]
             b = tbarr[:]
             self.assertTrue(
-                np.alltrue(a == b),
-                "NumPy array and PyTables modifications does not match.")
+                np.all(a == b),
+                "NumPy array and PyTables modifications does not match."
+            )
 
     def test02b_write(self):
         """Test for fancy-selections (working selections, write, broadcast)."""
@@ -2353,7 +2355,7 @@ class FancySelectionTestCase(common.TempFileMixin, common.PyTablesTestCase):
 #                 print("NumPy modified array:", a)
 #                 print("PyTables modifyied array:", b)
             self.assertTrue(
-                np.alltrue(a == b),
+                np.all(a == b),
                 "NumPy array and PyTables modifications does not match.")
 
 
@@ -2603,7 +2605,7 @@ class TestCreateArrayArgs(common.TempFileMixin, common.PyTablesTestCase):
                           atom=atom)
 
     def test_kwargs_obj_shape_error(self):
-        # atom = Atom.from_dtype(numpy.dtype('complex'))
+        # atom = Atom.from_dtype(np.dtype('complex'))
         shape = self.shape + self.shape
         self.assertRaises(TypeError,
                           self.h5file.create_array,

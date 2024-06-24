@@ -189,7 +189,9 @@ class BasicTestCase(common.TempFileMixin, common.PyTablesTestCase):
                 print("self, earray:", self.compress, earray.filters.complevel)
             self.assertEqual(earray.filters.complevel, self.compress)
             if self.compress > 0 and tb.which_lib_version(self.complib):
-                self.assertEqual(earray.filters.complib, self.complib)
+                # Some libraries like Blosc support different compressors,
+                # specified after ":".
+                self.assertEqual(earray.filters.complib.split(':')[0], self.complib)
             if self.shuffle != earray.filters.shuffle and common.verbose:
                 print("Error in shuffle. Class:", self.__class__.__name__)
                 print("self, earray:", self.shuffle, earray.filters.shuffle)
@@ -867,6 +869,74 @@ class Slices2EArrayTestCase(BasicTestCase):
     slices = (slice(1, 2, 1), slice(None, None, None), slice(1, 4, 2))
 
 
+@common.unittest.skipIf(not common.blosc2_avail,
+                        'BLOSC2 compression library not available')
+class Blosc2SlicesOptEArrayTestCase(BasicTestCase):
+    compress = 1
+    complib = "blosc2"
+    type = 'int32'
+    shape = (0, 13, 13)
+    chunkshape = (4, 4, 4)
+    nappends = 20
+    slices = (slice(None, None), slice(2, 10), slice(0, 10))
+
+
+@common.unittest.skipIf(not common.blosc2_avail,
+                        'BLOSC2 compression library not available')
+class Blosc2ComprTestCase(BasicTestCase):
+    compress = 1  # sss
+    complib = "blosc2"
+    chunkshape = (10, 10)
+    start = 3
+    stop = 10
+    step = 3
+
+
+@common.unittest.skipIf(not common.blosc2_avail,
+                        'BLOSC2 compression library not available')
+class Blosc2CrossChunkTestCase(BasicTestCase):
+    shape = (0, 10)
+    compress = 1  # sss
+    complib = "blosc2"
+    chunkshape = (4, 4)
+    nappends = 10
+    start = 3
+    stop = 6
+    step = 3
+
+
+@common.unittest.skipIf(not common.blosc2_avail,
+                        'BLOSC2 compression library not available')
+class Blosc2CrossChunkOptTestCase(Blosc2CrossChunkTestCase):
+    step = 1  # optimized
+    byteorder = sys.byteorder
+
+
+@common.unittest.skipIf(not common.blosc2_avail,
+                        'BLOSC2 compression library not available')
+class Blosc2InnerCrossChunkTestCase(Blosc2CrossChunkTestCase):
+    shape = (10, 0)
+
+
+@common.unittest.skipIf(not common.blosc2_avail,
+                        'BLOSC2 compression library not available')
+class Blosc2InnerCrossChunkOptTestCase(Blosc2InnerCrossChunkTestCase):
+    step = 1  # optimized
+    byteorder = sys.byteorder
+
+
+@common.unittest.skipIf(not common.blosc2_avail,
+                        'BLOSC2 compression library not available')
+class Blosc2PastLastChunkTestCase(BasicTestCase):
+    shape = (0, 10)
+    compress = 1  # sss
+    complib = "blosc2"
+    chunkshape = (4, 4)
+    nappends = 10
+    start = 8
+    stop = 100
+    step = 3
+
 class EllipsisEArrayTestCase(BasicTestCase):
     type = 'int32'
     shape = (2, 0)
@@ -1425,7 +1495,7 @@ class OffsetStrideTestCase(common.TempFileMixin, common.PyTablesTestCase):
         earray.append(a)
         # Change the byteorder of the array
         a = a.byteswap()
-        a = a.newbyteorder()
+        a = a.view(a.dtype.newbyteorder())
         # Add a byteswapped array
         earray.append(a)
 
@@ -1457,7 +1527,7 @@ class OffsetStrideTestCase(common.TempFileMixin, common.PyTablesTestCase):
         earray.append(a)
         # Change the byteorder of the array
         a = a.byteswap()
-        a = a.newbyteorder()
+        a = a.view(a.dtype.newbyteorder())
         # Add a byteswapped array
         earray.append(a)
 
@@ -1491,7 +1561,7 @@ class OffsetStrideTestCase(common.TempFileMixin, common.PyTablesTestCase):
         earray.append(a)
         # Change the byteorder of the array
         a = a.byteswap()
-        a = a.newbyteorder()
+        a = a.view(a.dtype.newbyteorder())
         # Add a byteswapped array
         earray.append(a)
 
@@ -1529,7 +1599,7 @@ class OffsetStrideTestCase(common.TempFileMixin, common.PyTablesTestCase):
         earray.append(a)
         # Change the byteorder of the array
         a = a.byteswap()
-        a = a.newbyteorder()
+        a = a.view(a.dtype.newbyteorder())
         # Add a byteswapped array
         earray.append(a)
 
@@ -1565,7 +1635,7 @@ class OffsetStrideTestCase(common.TempFileMixin, common.PyTablesTestCase):
         earray.append(a)
         # Change the byteorder of the array
         a = a.byteswap()
-        a = a.newbyteorder()
+        a = a.view(a.dtype.newbyteorder())
         # Add a byteswapped array
         earray.append(a)
 
@@ -1603,7 +1673,7 @@ class OffsetStrideTestCase(common.TempFileMixin, common.PyTablesTestCase):
         earray.append(a)
         # Change the byteorder of the array
         a = a.byteswap()
-        a = a.newbyteorder()
+        a = a.view(a.dtype.newbyteorder())
         # Add a byteswapped array
         earray.append(a)
 
@@ -2756,7 +2826,7 @@ class TestCreateEArrayArgs(common.TempFileMixin, common.PyTablesTestCase):
                           atom=atom)
 
     def test_kwargs_obj_shape_error(self):
-        # atom = tables.Atom.from_dtype(numpy.dtype('complex'))
+        # atom = tables.Atom.from_dtype(np.dtype('complex'))
         shape = self.shape + self.shape
         self.assertRaises(TypeError,
                           self.h5file.create_earray,
@@ -2779,7 +2849,7 @@ class TestCreateEArrayArgs(common.TempFileMixin, common.PyTablesTestCase):
                           shape=self.shape)
 
     def test_kwargs_obj_atom_shape_error_02(self):
-        # atom = tables.Atom.from_dtype(numpy.dtype('complex'))
+        # atom = tables.Atom.from_dtype(np.dtype('complex'))
         shape = self.shape + self.shape
         self.assertRaises(TypeError,
                           self.h5file.create_earray,
@@ -2831,6 +2901,13 @@ def suite():
         theSuite.addTest(common.unittest.makeSuite(ZlibShuffleTestCase))
         theSuite.addTest(common.unittest.makeSuite(BloscComprTestCase))
         theSuite.addTest(common.unittest.makeSuite(BloscShuffleTestCase))
+        theSuite.addTest(common.unittest.makeSuite(Blosc2SlicesOptEArrayTestCase))
+        theSuite.addTest(common.unittest.makeSuite(Blosc2ComprTestCase))
+        theSuite.addTest(common.unittest.makeSuite(Blosc2CrossChunkTestCase))
+        theSuite.addTest(common.unittest.makeSuite(Blosc2CrossChunkOptTestCase))
+        theSuite.addTest(common.unittest.makeSuite(Blosc2InnerCrossChunkTestCase))
+        theSuite.addTest(common.unittest.makeSuite(Blosc2InnerCrossChunkOptTestCase))
+        theSuite.addTest(common.unittest.makeSuite(Blosc2PastLastChunkTestCase))
         theSuite.addTest(common.unittest.makeSuite(LZOComprTestCase))
         theSuite.addTest(common.unittest.makeSuite(LZOShuffleTestCase))
         theSuite.addTest(common.unittest.makeSuite(Bzip2ComprTestCase))

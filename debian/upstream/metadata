@@ -2,3 +2,4 @@ Bug-Database: https://github.com/PyTables/PyTables/issues
 Bug-Submit: https://github.com/PyTables/PyTables/issues/new
 Repository: https://github.com/PyTables/PyTables.git
 Repository-Browse: https://github.com/PyTables/PyTables
+Security-Contact: https://github.com/PyTables/PyTables/tree/HEAD/SECURITY.md

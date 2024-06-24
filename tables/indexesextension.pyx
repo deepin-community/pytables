@@ -25,7 +25,7 @@ Misc variables:
 """
 
 import cython
-import numpy
+import numpy as np
 cimport numpy as cnp
 
 from .exceptions import HDF5ExtError
@@ -189,7 +189,7 @@ def keysort(ndarray array1, ndarray array2):
         raise ValueError("Unknown array datatype")
 
 
-cdef inline void swap_bytes(char *x, char *y, size_t n) nogil:
+cdef inline void swap_bytes(char *x, char *y, size_t n) noexcept nogil:
     if n == 8:
         (<npy_int64*>x)[0], (<npy_int64*>y)[0] = (<npy_int64*>y)[0], (<npy_int64*>x)[0]
     elif n == 4:
@@ -209,7 +209,7 @@ cdef inline int less_than(number_type* a, number_type* b) nogil:
 
 
 @cython.cdivision(True)
-cdef void _keysort(number_type* start1, char* start2, size_t elsize2, size_t n) nogil:
+cdef void _keysort(number_type* start1, char* start2, size_t elsize2, size_t n) noexcept nogil:
     cdef number_type *pl = start1
     cdef number_type *pr = start1 + (n - 1)
 
@@ -352,7 +352,7 @@ cdef void _keysort(number_type* start1, char* start2, size_t elsize2, size_t n) 
 
 
 @cython.cdivision(True)
-cdef void _keysort_string(char* start1, size_t ss, char* start2, size_t ts, size_t n) nogil:
+cdef void _keysort_string(char* start1, size_t ss, char* start2, size_t ts, size_t n) noexcept nogil:
     cdef char *pl = start1
     cdef char *pr = start1 + (n - 1) * ss
 
@@ -381,7 +381,7 @@ cdef void _keysort_string(char* start1, size_t ss, char* start2, size_t ts, size
     cdef char *ipt
 
     while True:
-        while pr - pl > SMALL_QUICKSORT * ss:
+        while pr - pl > <long>(SMALL_QUICKSORT * ss):
             pm  = pl + ((pr - pl)//ss >> 1)*ss
             ipm  = ipl + ((ipr - ipl)//ts >> 1)*ts
 
@@ -628,7 +628,7 @@ cdef class IndexArray(Array):
     # Create the buffer for reading sorted data chunks if not created yet
     if <object>self.bufferlb is None:
       # Internal buffers
-      self.bufferlb = numpy.empty(dtype=dtype, shape=self.chunksize)
+      self.bufferlb = np.empty(dtype=dtype, shape=self.chunksize)
       # Get the pointers to the different buffer data areas
       self.rbuflb = PyArray_DATA(self.bufferlb)
       # Init structures for accelerating sorted array reads
@@ -663,7 +663,7 @@ cdef class IndexArray(Array):
       maxslots = params['BOUNDS_MAX_SIZE'] // rowsize
       self.boundscache = <NumCache>NumCache(
         (maxslots, self.nbounds), dtype, 'non-opt types bounds')
-      self.bufferbc = numpy.empty(dtype=dtype, shape=self.nbounds)
+      self.bufferbc = np.empty(dtype=dtype, shape=self.nbounds)
       # Get the pointer for the internal buffer for 2nd level cache
       self.rbufbc = PyArray_DATA(self.bufferbc)
       # Another NumCache for the sorted values

@@ -51,7 +51,7 @@ def get_db_size(filename):
 
 def bench(chunkshape, filters):
     np.random.seed(1)   # to have reproductible results
-    filename = tempfile.mktemp(suffix='.h5')
+    filename = tempfile.NamedTemporaryFile(suffix='.h5').name
     print("Doing test on the file system represented by:", filename)
 
     f = tb.open_file(filename, 'w')
@@ -61,7 +61,7 @@ def bench(chunkshape, filters):
     # Fill the array
     t1 = clock()
     for i in range(N):
-        # e.append([numpy.random.rand(M)])  # use this for less compressibility
+        # e.append([np.random.rand(M)])  # use this for less compressibility
         e.append([quantize(np.random.rand(M), 6)])
     # os.system("sync")
     print(f"Creation time: {clock() - t1:.3f}", end=' ')

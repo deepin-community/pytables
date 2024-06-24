@@ -248,7 +248,7 @@ class BasicTestCase(common.TempFileMixin, common.PyTablesTestCase):
         if common.verbose:
             print("Table:", repr(table))
             print("Nrows in", table._v_pathname, ":", table.nrows)
-            print("Last record in table ==>", r)
+            print("Last record in table ==>", table[-1])
             print("Total selected records in table ==> ", len(result))
         nrows = self.expectedrows - 1
         r = [r for r in table.iterrows() if r['var2'][0][0] < 20][-1]
@@ -283,7 +283,7 @@ class BasicTestCase(common.TempFileMixin, common.PyTablesTestCase):
         result1 = [r['var5'] for r in table.iterrows() if r['var2'][0][0] < 20]
         if common.verbose:
             print("Nrows in", table._v_pathname, ":", table.nrows)
-            print("Last record in table ==>", r)
+            print("Last record in table ==>", table[-1])
             print("Total selected records in table ==> ", len(result1))
         nrows = table.nrows
         result2 = [r for r in table.iterrows() if r['var2'][0][0] < 20][-1]
@@ -422,7 +422,7 @@ class BasicTestCase(common.TempFileMixin, common.PyTablesTestCase):
         if common.verbose:
             print("Nrows in", table._v_pathname, ":", table.nrows)
             print("On-disk byteorder ==>", table.byteorder)
-            print("Last record in table ==>", r)
+            print("Last record in table ==>", table[-1])
             print("Total selected records in table ==>", len(result))
         nrows = self.expectedrows - 1
         r = list(table.iterrows())[-1]
@@ -472,7 +472,7 @@ class RecArrayTwoWriteTestCase(BasicTestCase):
     recarrayinit = 1
     recordtemplate = np.rec.array(
         None,
-        formats="(2,)a4,(2,2)a4,(2,)i4,(2,2)i4,i2,f8,f4,i2,a1",
+        formats="(2,)S4,(2,2)S4,(2,)i4,(2,2)i4,i2,f8,f4,i2,S1",
         names='var0,var1,var1_,var2,var3,var4,var5,var6,var7',
         shape=1)
 
@@ -483,7 +483,7 @@ class RecArrayThreeWriteTestCase(BasicTestCase):
     recarrayinit = 1
     recordtemplate = np.rec.array(
         None,
-        formats="(2,)a4,(2,2)a4,(2,)i4,(2,2)i4,i2,2f8,4f4,i2,a1",
+        formats="(2,)S4,(2,2)S4,(2,)i4,(2,2)i4,i2,2f8,4f4,i2,S1",
         names='var0,var1,var1_,var2,var3,var4,var5,var6,var7',
         shape=1)
 
@@ -494,7 +494,7 @@ class RecArrayAlignedWriteTestCase(BasicTestCase):
     recarrayinit = 1
     recordtemplate = np.rec.array(
         None,
-        formats="(2,)a4,(2,2)a4,(2,)i4,(2,2)i4,i2,2f8,4f4,i2,a1",
+        formats="(2,)S4,(2,2)S4,(2,)i4,(2,2)i4,i2,2f8,4f4,i2,S1",
         names='var0,var1,var1_,var2,var3,var4,var5,var6,var7',
         shape=1, aligned=True)
 
@@ -678,6 +678,8 @@ class BasicRangeTestCase(common.TempFileMixin, common.PyTablesTestCase):
                 elif self.checkgetCol:
                     print("Last value *read* in getCol ==>", column[-1])
                 else:
+                    r = list(
+                        table.iterrows(self.start, self.stop, self.step))[-1]
                     print("Last record *read* in table range ==>", r)
             print("Total number of selected records ==>", len(result))
             print("Selected records:\n", result)
@@ -1008,7 +1010,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         floatlist2 = np.array([[4.5, 2.4]*3]*4)
         b = [(intlist1, arrlist1, floatlist1), (
             intlist2, arrlist2, floatlist2)]
-        r = np.rec.array(b, formats='(2,6)i4,(3,2)a3,(4,6)f8',
+        r = np.rec.array(b, formats='(2,6)i4,(3,2)S3,(4,6)f8',
                          names='col1,col2,col3')
 
         # Save it in a table:
@@ -1031,7 +1033,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         floatlist2 = np.array([[4.5, 2.4]*3]*4)
         b = [(intlist1, arrlist1, floatlist1), (
             intlist2, arrlist2, floatlist2)]
-        r = np.rec.array(b, formats='(2,6)i4,(3,2)a3,(4,6)f8',
+        r = np.rec.array(b, formats='(2,6)i4,(3,2)S3,(4,6)f8',
                          names='col1,col2,col3')
 
         # Get a view of the recarray
@@ -1057,7 +1059,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         floatlist2 = np.array([[4.5, 2.4]*3]*4)
         b = [(intlist1, arrlist1, floatlist1), (
             intlist2, arrlist2, floatlist2)]
-        r = np.rec.array(b * 300,  formats='(1,6,18)i4,(3,2)a3,(4,6)f8',
+        r = np.rec.array(b * 300,  formats='(1,6,18)i4,(3,2)S3,(4,6)f8',
                          names='col1,col2,col3')
 
         # Get an slice of recarray
@@ -1083,7 +1085,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         floatlist2 = np.array([[4.5, 2.4]*3]*4)
         b = [(intlist1, arrlist1, floatlist1), (
             intlist2, arrlist2, floatlist2)]
-        r = np.rec.array(b * 300, formats='(1,6,18)i4,(3,2)a3,(4,6)f8',
+        r = np.rec.array(b * 300, formats='(1,6,18)i4,(3,2)S3,(4,6)f8',
                          names='col1,col2,col3', shape=600)
 
         # Get an strided recarray
@@ -1114,7 +1116,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         s0, s1, s2, s3 = ['dbe']*3, ['ded']*3, ['db1']*3, ['de1']*3
         f0, f1, f2, f3 = [[1.2]*2]*3, [[1.3]*2]*3, [[1.4]*2]*3, [[1.5]*2]*3
         r = np.rec.array([([456, 457], s0, f0), ([2, 3], s1, f1)],
-                         formats="(2,)i4,(3,)a3,(3,2)f8")
+                         formats="(2,)i4,(3,)S3,(3,2)f8")
         table.append(r)
         table.append([([457, 458], s2, f2), ([5, 6], s3, f3)])
 
@@ -1124,7 +1126,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         # Create the modified recarray
         r1 = np.rec.array([([456, 457], s0, f0), ([2, 3], s1, f1),
                            ([3, 4], s2, f2), ([4, 5], s3, f3)],
-                          formats="(2,)i4,(3,)a3,(3,2)f8",
+                          formats="(2,)i4,(3,)S3,(3,2)f8",
                           names="col1,col2,col3")
 
         # Read the modified table
@@ -1149,7 +1151,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         s0, s1, s2, s3 = ['dbe']*3, ['ded']*3, ['db1']*3, ['de1']*3
         f0, f1, f2, f3 = [[1.2]*2]*3, [[1.3]*2]*3, [[1.4]*2]*3, [[1.5]*2]*3
         r = np.rec.array([([456, 457], s0, f0), ([2, 3], s1, f1)],
-                         formats="(2,)i4,(3,)a3,(3,2)f8")
+                         formats="(2,)i4,(3,)S3,(3,2)f8")
         table.append(r)
         table.append([([457, 458], s2, f2), ([5, 6], s3, f3)])
 
@@ -1161,7 +1163,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         # Create the modified recarray
         r1 = np.rec.array([([456, 457], s0, f0), ([2, 3], s1, f1),
                            ([3, 4], s2, f2), ([4, 5], s3, f3)],
-                          formats="(2,)i4,(3,)a3,(3,2)f8",
+                          formats="(2,)i4,(3,)S3,(3,2)f8",
                           names="col1,col2,col3")
 
         # Read the modified table
@@ -1187,7 +1189,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         s0, s1, s2, s3 = ['dbe']*3, ['ded']*3, ['db1']*3, ['de1']*3
         f0, f1, f2, f3 = [[1.2]*2]*3, [[1.3]*2]*3, [[1.4]*2]*3, [[1.5]*2]*3
         r = np.rec.array([([456, 457], s0, f0), ([2, 3], s1, f1)],
-                         formats="(2,)i4,(3,)a3,(3,2)f8")
+                         formats="(2,)i4,(3,)S3,(3,2)f8")
         table.append(r)
         table.append([([457, 458], s2, f2), ([5, 6], s3, f3)])
 
@@ -1199,7 +1201,7 @@ class RecArrayIO(common.TempFileMixin, common.PyTablesTestCase):
         # Create the modified recarray
         r1 = np.rec.array([([456, 457], s0, f0), ([2, 3], s1, f1),
                            ([3, 4], s2, f2), ([4, 5], s3, f3)],
-                          formats="(2,)i4,(3,)a3,(3,2)f8",
+                          formats="(2,)i4,(3,)S3,(3,2)f8",
                           names="col1,col2,col3")
 
         # Read the modified table
@@ -1242,7 +1244,7 @@ class DefaultValues(common.TempFileMixin, common.PyTablesTestCase):
             2, 3.1, 4.2, 5, "e")]
         r = np.rec.array(
             buffer * nrows,
-            formats='(2,)a4,(2,2)a4,(2,)i4,(2,2)i4,i2,f8,f4,u2,a1',
+            formats='(2,)S4,(2,2)S4,(2,)i4,(2,2)i4,i2,f8,f4,u2,S1',
             names=['var0', 'var1', 'var1_', 'var2', 'var3', 'var4', 'var5',
                    'var6', 'var7'])  # *-*
 
