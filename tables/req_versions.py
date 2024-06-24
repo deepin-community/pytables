@@ -3,13 +3,14 @@
 from packaging.version import Version
 
 # **********************************************************************
-#   Keep these in sync with setup.cfg and user's guide
+#   Runtime requirements, keep versions in sync with
+#   "Prerequisites" in the User's Guide.
 # **********************************************************************
 
 # Minimum recommended versions for mandatory packages
-min_numpy_version = Version('1.9.3')
+min_numpy_version = Version('1.19.0')
 min_numexpr_version = Version('2.6.2')
-min_hdf5_version = Version('1.8.4')
-min_blosc_version = Version("1.4.1")
-min_blosc_bitshuffle_version = Version("1.8.0")
-"""The minumum Blosc version where BitShuffle can be used safely."""
+# These are library versions, not the python modules
+min_hdf5_version = Version('1.10.5')
+min_blosc_version = Version('1.11.1')
+min_blosc2_version = Version('2.11.0')

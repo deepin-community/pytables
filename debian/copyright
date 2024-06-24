@@ -7,10 +7,11 @@ Copyright: 2002-2004, Francesc Alted
            2005-2007, Carabos Coop. V.
            2008-2010, Francesc Alted
            2011-2021, PyTables maintainers
+           2019-2023, PyTables Developers <pytables@pytables.org>
 License: BSD-3-Clause
 
 Files: debian/*
-Copyright: 2011-2023, Antonio Valentino <antonio.valentino@tiscali.it>
+Copyright: 2011-2024, Antonio Valentino <antonio.valentino@tiscali.it>
 License: BSD-3-Clause
 
 Files: src/H5ARRAY.c src/H5VLARRAY.c
@@ -99,11 +100,11 @@ License: BSD-style
  advertising or product endorsement purposes.
 
 Files: hdf5-blosc/*
-Copyright: 2010-2016, Francesc Alted
+Copyright: 2009-2016, Francesc Alted <francesc@blosc.org>
 License: Expat
 
-Files: cpuinfo.py
-Copyright: 2014-2017, Matthew Brennan Jones <matthew.brennan.jones@gmail.com>
+Files: hdf5-blosc2/*
+Copyright: 2022, Blosc Development Team
 License: Expat
 
 License: BSD-3-Clause

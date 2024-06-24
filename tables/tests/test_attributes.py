@@ -578,7 +578,7 @@ class CreateTestCase(common.TempFileMixin, common.PyTablesTestCase):
         # In the views old implementation PyTAbles performa a copy of the
         # array:
         #
-        #     value = numpy.array(value)
+        #     value = np.array(value)
         #
         # in order to get a contiguous array.
         # Unfortunately array with swapped axis are copyed as they are so
@@ -945,9 +945,9 @@ class TypesTestCase(common.TempFileMixin, common.PyTablesTestCase):
             self.root = self.h5file.root
             self.array = self.h5file.root.anarray
 
-        self.assertIsInstance(self.root.anarray.attrs.pq, np.float_)
-        self.assertIsInstance(self.root.anarray.attrs.qr, np.float_)
-        self.assertIsInstance(self.root.anarray.attrs.rs, np.float_)
+        self.assertIsInstance(self.root.anarray.attrs.pq, np.float64)
+        self.assertIsInstance(self.root.anarray.attrs.qr, np.float64)
+        self.assertIsInstance(self.root.anarray.attrs.rs, np.float64)
         self.assertEqual(self.root.anarray.attrs.pq, 1.0)
         self.assertEqual(self.root.anarray.attrs.qr, 2.0)
         self.assertEqual(self.root.anarray.attrs.rs, 3.0)
@@ -1232,9 +1232,9 @@ class TypesTestCase(common.TempFileMixin, common.PyTablesTestCase):
             self.root = self.h5file.root
             self.array = self.h5file.root.anarray
 
-        self.assertIsInstance(self.root.anarray.attrs.pq, np.complex_)
-        self.assertIsInstance(self.root.anarray.attrs.qr, np.complex_)
-        self.assertIsInstance(self.root.anarray.attrs.rs, np.complex_)
+        self.assertIsInstance(self.root.anarray.attrs.pq, np.complex128)
+        self.assertIsInstance(self.root.anarray.attrs.qr, np.complex128)
+        self.assertIsInstance(self.root.anarray.attrs.rs, np.complex128)
         self.assertEqual(self.root.anarray.attrs.pq, 1.0 + 2j)
         self.assertEqual(self.root.anarray.attrs.qr, 2.0 + 3j)
         self.assertEqual(self.root.anarray.attrs.rs, 3.0 + 4j)
@@ -1342,9 +1342,9 @@ class TypesTestCase(common.TempFileMixin, common.PyTablesTestCase):
             self.root = self.h5file.root
             self.array = self.h5file.root.anarray
 
-        self.assertIsInstance(self.array.attrs.pq, np.unicode_)
-        self.assertIsInstance(self.array.attrs.qr, np.unicode_)
-        self.assertIsInstance(self.array.attrs.rs, np.unicode_)
+        self.assertIsInstance(self.array.attrs.pq, np.str_)
+        self.assertIsInstance(self.array.attrs.qr, np.str_)
+        self.assertIsInstance(self.array.attrs.rs, np.str_)
         self.assertEqual(self.array.attrs.pq, 'para\u0140lel')
         self.assertEqual(self.array.attrs.qr, '')
         self.assertEqual(self.array.attrs.rs, 'baz')
@@ -1374,7 +1374,7 @@ class TypesTestCase(common.TempFileMixin, common.PyTablesTestCase):
 
         # The next raises a `TypeError` when unpickled. See:
         # http://projects.scipy.org/numpy/ticket/1037
-        # self.array.attrs.pq = numpy.array([''])
+        # self.array.attrs.pq = np.array([''])
         self.array.attrs.pq = np.array([''], dtype="U1")
 
         # Check the results
@@ -1697,12 +1697,12 @@ class CompatibilityTestCase(common.TestFileMixin, common.PyTablesTestCase):
         # See also gh-368 and https://github.com/numpy/numpy/issues/4879.
         #
         # This is a compatibility test. In PyTables < 3.0 unicode
-        # attributes were stored as pickld unicode stings.
+        # attributes were stored as pickled unicode strings.
         # In PyTables >= 3.0 unicode strings are stored as encoded utf-8
         # strings (the utf-8 marker is set at HDF5 level).
         #
         # In any case PyTables (>= 3.0) should be able to handle correctly
-        # also data files genetated with older versions of PyTables.
+        # also data files generated with older versions of PyTables.
         # Unfortunately a bug in numpy < 1.9
         # (https://github.com/numpy/numpy/issues/4879) makes it impossible
         # unpickle numpy arrays with dtype "U" resulting in an incorrect

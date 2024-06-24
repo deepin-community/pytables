@@ -11,7 +11,6 @@ nodes.
 import atexit
 import datetime
 import os
-import sys
 import weakref
 import warnings
 from collections import defaultdict
@@ -24,7 +23,7 @@ from . import hdf5extension
 from . import utilsextension
 from . import parameters
 from .exceptions import (ClosedFileError, FileModeError, NodeError,
-                         NoSuchNodeError, UndoRedoError, ClosedNodeError,
+                         NoSuchNodeError, UnclosedFileWarning, UndoRedoError, ClosedNodeError,
                          PerformanceWarning)
 from .registry import get_class_by_name
 from .path import join_path, split_path
@@ -108,16 +107,11 @@ class _FileRegistry:
         return self._name_mapping[filename]
 
     def close_all(self):
-        are_open_files = len(self._handlers) > 0
-        if are_open_files:
-            sys.stderr.write("Closing remaining open files:")
         handlers = list(self._handlers)  # make a copy
         for fileh in handlers:
-            sys.stderr.write("%s..." % fileh.filename)
+            msg = f"Closing remaining open file: {fileh.filename}"
+            warnings.warn(UnclosedFileWarning(msg))
             fileh.close()
-            sys.stderr.write("done")
-        if are_open_files:
-            sys.stderr.write("\n")
 
 
 # Dict of opened files (keys are filenames and values filehandlers)
@@ -267,7 +261,7 @@ def open_file(filename, mode="r", title="", root_uep="/", filters=None,
 
     # Check already opened files
     if _FILE_OPEN_POLICY == 'strict':
-        # This policy do not allows to open the same file multiple times
+        # This policy does not allow to open the same file multiple times
         # even in read-only mode
         if filename in _open_files:
             raise ValueError(
@@ -1585,6 +1579,8 @@ class File(hdf5extension.File):
             a class derived from Node (e.g. Table). If the node is found but it
             is not an instance of that class, a NoSuchNodeError is also raised.
 
+        Notes
+        -----
         If the node to be returned does not exist, a NoSuchNodeError is
         raised. Please note that hidden nodes are also considered.
 

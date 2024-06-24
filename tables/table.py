@@ -6,6 +6,7 @@ import operator
 import sys
 import warnings
 from pathlib import Path
+import weakref
 
 from time import perf_counter as clock
 
@@ -38,7 +39,7 @@ if profile:
 
 
 # 2.2: Added support for complex types. Introduced in version 0.9.
-# 2.2.1: Added suport for time types.
+# 2.2.1: Added support for time types.
 # 2.3: Changed the indexes naming schema.
 # 2.4: Changed indexes naming schema (again).
 # 2.5: Added the FIELD_%d_FILL attributes.
@@ -1517,8 +1518,7 @@ very small/large chunksize, you may want to increase/decrease it."""
             cstart, cstop = coords[0], coords[-1] + 1
             if cstop - cstart == len(coords):
                 # Chances for monotonically increasing row values. Refine.
-                inc_seq = np.alltrue(
-                    np.arange(cstart, cstop) == np.array(coords))
+                inc_seq = np.all(np.arange(cstart, cstop) == np.array(coords))
                 if inc_seq:
                     return self.read(cstart, cstop, field=field)
         return self.read_coordinates(coords, field)
@@ -2079,8 +2079,9 @@ very small/large chunksize, you may want to increase/decrease it."""
             table[2] = [456,'db2',1.2]
 
             # Modify two existing rows
-            rows = numpy.rec.array([[457,'db1',1.2],[6,'de2',1.3]],
-                                   formats='i4,a3,f8')
+            rows = np.rec.array(
+                [[457,'db1',1.2],[6,'de2',1.3]], formats='i4,S3,f8'
+            )
             table[1:30:2] = rows             # modify a table slice
             table[[1,3]] = rows              # only modifies rows 1 and 3
             table[[True,False,True]] = rows  # only modifies rows 0 and 2
@@ -2088,8 +2089,9 @@ very small/large chunksize, you may want to increase/decrease it."""
         Which is equivalent to::
 
             table.modify_rows(start=2, rows=[456,'db2',1.2])
-            rows = numpy.rec.array([[457,'db1',1.2],[6,'de2',1.3]],
-                                   formats='i4,a3,f8')
+            rows = np.rec.array(
+                [[457,'db1',1.2],[6,'de2',1.3]], formats='i4,S3,f8'
+            )
             table.modify_rows(start=1, stop=3, step=2, rows=rows)
             table.modify_coordinates([1,3,2], rows)
             table.modify_coordinates([True, False, True], rows)
@@ -2182,18 +2184,25 @@ very small/large chunksize, you may want to increase/decrease it."""
             raise HDF5ExtError(
                 "You cannot append rows to a non-chunked table.", h5bt=False)
 
-        # Try to convert the object into a recarray compliant with table
-        try:
-            iflavor = flavor_of(rows)
-            if iflavor != 'python':
-                rows = array_as_internal(rows, iflavor)
-            # Works for Python structures and always copies the original,
-            # so the resulting object is safe for in-place conversion.
-            wbufRA = np.rec.array(rows, dtype=self._v_dtype)
-        except Exception as exc:  # XXX
-            raise ValueError("rows parameter cannot be converted into a "
-                             "recarray object compliant with table '%s'. "
-                             "The error was: <%s>" % (str(self), exc))
+        if (hasattr(rows, "dtype") and
+                not self.description._v_is_nested and
+                rows.dtype == self.dtype):
+            # Shortcut for compliant arrays
+            # (for some reason, not valid for nested types)
+            wbufRA = rows
+        else:
+            # Try to convert the object into a recarray compliant with table
+            try:
+                iflavor = flavor_of(rows)
+                if iflavor != 'python':
+                    rows = array_as_internal(rows, iflavor)
+                # Works for Python structures and always copies the original,
+                # so the resulting object is safe for in-place conversion.
+                wbufRA = np.rec.array(rows, dtype=self._v_dtype)
+            except Exception as exc:  # XXX
+                raise ValueError("rows parameter cannot be converted into a "
+                                 "recarray object compliant with table '%s'. "
+                                 "The error was: <%s>" % (str(self), exc))
         lenrows = wbufRA.shape[0]
         # If the number of rows to append is zero, don't do anything else
         if lenrows > 0:
@@ -2941,6 +2950,9 @@ very small/large chunksize, you may want to increase/decrease it."""
         if cols is not None:
             cols._g_close()
 
+        # Clean address cache
+        self._clean_chunk_addrs()
+
         # Close myself as a leaf.
         super()._f_close(False)
 
@@ -3106,7 +3118,6 @@ class Cols:
         be used as shorthands for the :meth:`Table.read` method.
 
         """
-
         table = self._v_table
         nrows = table.nrows
         if is_idx(key):
@@ -3262,6 +3273,10 @@ class Column:
         The complete pathname of the associated column (the same as
         Column.name if the column is not inside a nested column).
 
+    .. attribute:: attrs
+
+        Column attributes (see :ref:`ColClassDescr`).
+
     Parameters
     ----------
     table
@@ -3335,6 +3350,7 @@ class Column:
         self.descr = descr
         """The Description (see :ref:`DescriptionClassDescr`) instance of the
         parent table or nested column."""
+        self._v_attrs = ColumnAttributeSet(self)
 
     def _g_update_table_location(self, table):
         """Updates the location information about the associated `table`."""
@@ -3460,7 +3476,7 @@ class Column:
             table.modify_columns(start=1, columns=[[-1]], names=['col1'])
 
             # Modify rows 1 and 3
-            columns = numpy.rec.fromarrays([[2,3]], formats='i4')
+            columns = np.rec.fromarrays([[2,3]], formats='i4')
             table.modify_columns(start=1, step=2, columns=columns,
                                  names=['col1'])
 
@@ -3672,3 +3688,140 @@ class Column:
         """A detailed string representation for this object."""
 
         return str(self)
+
+    @lazyattr
+    def _v_pos(self):
+        return self.descr._v_colobjects[self.name]._v_pos
+
+    @lazyattr
+    def _v_col_attrs(self):
+        return self.descr._v_colobjects[self.name]._v_col_attrs
+
+    @property
+    def attrs(self):
+        return self._v_attrs
+
+
+class ColumnAttributeSet:
+
+    def __init__(self, column):
+
+        self.__dict__['_v_tableattrs'] = column.table.attrs
+        self.__dict__['_v_fieldindex'] = column._v_pos
+        self.__dict__['_v_column_reference'] = weakref.ref(column)
+
+        # Check if this column has _v_col_attrs set and translate them into
+        # the table attribute format
+        for col_attr_key, col_attr_val in column._v_col_attrs.items():
+            self.__setitem__(col_attr_key, col_attr_val)
+
+    def issystemcolumnname(self, key):
+        """Checks whether a key is a reserved attribute name, or should be passed through."""
+        return key in ['_v_tableattrs', '_v_fieldindex', '_v_column_reference']
+
+    def _prefix(self, string):
+        """Prefixes a key with a special pattern for storing with table attributes"""
+        field_index = self.__dict__['_v_fieldindex']
+        return 'FIELD_%i_ATTR_%s' % (field_index, string)
+
+    def __getattr__(self, key):
+        """Retrieves a PyTables attribute for this column"""
+        if not self.issystemcolumnname(key):
+            return getattr(self._v_tableattrs, self._prefix(key))
+        else:
+            return super().__getattr__(key)
+
+    def __setattr__(self, key, val):
+        """Sets a PyTables attribute for this column"""
+        if not self.issystemcolumnname(key):
+            setattr(self._v_tableattrs, self._prefix(key), val)
+        else:
+            return super().__setattr__(key, val)
+
+    def __getitem__(self, key):
+        """A dictionary-like interface for __getattr__"""
+        if not self.issystemcolumnname(key):
+            return self._v_tableattrs[self._prefix(key)]
+        else:
+            return self[key]
+
+    def __setitem__(self, key, value):
+        """A dictionary-like interface for __setattr__"""
+        if not self.issystemcolumnname(key):
+            self._v_tableattrs[self._prefix(key)] = value
+        else:
+            self[key] = value
+
+    def __delattr__(self, key):
+        """Deletes the attribute for this column"""
+        if self.issystemcolumnname(key):
+            raise TypeError('Deleting system attributes is prohibited')
+        else:
+            delattr(self._v_tableattrs, self._prefix(key))
+
+    def __delitem__(self, key):
+        """A dictionary-like interface for __delattr__"""
+        if self.issystemcolumnname(key):
+            raise TypeError('Deleting system attributes is prohibited')
+        else:
+            del self._v_tableattrs[self._prefix(key)]
+
+    def _f_rename(self, oldattrname, newattrname):
+        """Rename an attribute from oldattrname to newattrname."""
+
+        if oldattrname == newattrname:
+            # Do nothing
+            return
+
+        if self.issystemcolumnname(oldattrname):
+            raise TypeError('Renaming system attributes is prohibited')
+
+        # First, fetch the value of the oldattrname
+        attrvalue = getattr(self, oldattrname)
+
+        # Now, create the new attribute
+        setattr(self, newattrname, attrvalue)
+
+        # Finally, remove the old attribute
+        delattr(self, oldattrname)
+
+    def _f_copy(self, where):
+        """Copy attributes to another column"""
+
+        # Is there a better way to do this?
+        if not isinstance(where, Column):
+            raise TypeError(f"destination object is not a column: {where!r}")
+
+        for key in self.keys():
+            where.attrs[key] = self[key]
+
+    def keys(self):
+        """Returns the list of attributes for this column"""
+        col_prefix = self._prefix('')
+        length = len(col_prefix)
+        return [key[length:] for key in self._v_tableattrs._v_attrnames if key.startswith(col_prefix)]
+
+    def contains(self, key):
+        """Returns whether a key is in the attribute set"""
+        return key in self.keys()
+
+    def __str__(self):
+        """The string representation for this object."""
+
+        pathname = self._v_tableattrs._v__nodepath
+        classname = self._v_column_reference().__class__.__name__  # self._v_tableattrs._v_node.__class__.__name__
+        attrnumber = sum(1 for _ in self.keys())
+        columnname = self._v_column_reference().name
+
+        return f"{pathname}.cols.{columnname}._v_attrs ({classname}), {attrnumber} attributes"
+
+    def __repr__(self):
+        """A detailed string representation for this object."""
+
+        # print additional info only if there are attributes to show
+        attrnames = self.keys()
+        if attrnames:
+            rep = [f'{attr} := {getattr(self, attr)!r}' for attr in attrnames]
+            return f"{self!s}:\n   [" + ',\n    '.join(rep) + "]"
+        else:
+            return str(self)

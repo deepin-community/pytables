@@ -8,7 +8,7 @@ Forwarded: not-needed
  1 file changed, 4 insertions(+)
 
 diff --git a/tables/tests/test_index_backcompat.py b/tables/tests/test_index_backcompat.py
-index f845a33..7b922de 100644
+index a3f404f..3dc94c4 100644
 --- a/tables/tests/test_index_backcompat.py
 +++ b/tables/tests/test_index_backcompat.py
 @@ -1,7 +1,9 @@

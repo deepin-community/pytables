@@ -48,7 +48,7 @@ type_info = {
     'time32': (np.int32, int),
     'time64': (np.float64, float),
     'enum': (np.uint8, int),  # just for these tests
-    'string': ('S%s' % _strlen, np.string_),  # just for these tests
+    'string': ('S%s' % _strlen, np.bytes_),  # just for these tests
 }
 """NumPy and Numexpr type for each PyTables type that will be tested."""
 
@@ -63,13 +63,13 @@ func_info = {'log10': np.log10, 'log': np.log, 'exp': np.exp,
 if hasattr(np, 'float16'):
     type_info['float16'] = (np.float16, float)
 # if hasattr(numpy, 'float96'):
-#    type_info['float96'] = (numpy.float96, float)
+#    type_info['float96'] = (np.float96, float)
 # if hasattr(numpy, 'float128'):
-#    type_info['float128'] = (numpy.float128, float)
+#    type_info['float128'] = (np.float128, float)
 # if hasattr(numpy, 'complex192'):
-#    type_info['complex192'] = (numpy.complex192, complex)
+#    type_info['complex192'] = (np.complex192, complex)
 # if hasattr(numpy, 'complex256'):
-#    type_info['complex256'] = (numpy.complex256, complex)
+#    type_info['complex256'] = (np.complex256, complex)
 
 sctype_from_type = {type_: info[0] for (type_, info) in type_info.items()}
 """Maps PyTables types to NumPy scalar types."""
@@ -329,6 +329,12 @@ class TableDataTestCase(BaseTableQueryTestCase):
     _testfmt_heavy = 'test_h%04d'
 
 
+def _old_repr(o):
+    if isinstance(o, np.bytes_):
+        return repr(bytes(o))
+    return repr(o)
+
+
 def create_test_method(type_, op, extracond, func=None):
     sctype = sctype_from_type[type_]
 
@@ -353,7 +359,7 @@ def create_test_method(type_, op, extracond, func=None):
     elif op == '~':  # unary
         cond = '~(%s)' % colname
     elif op == '<' and func is None:  # binary variable-constant
-        cond = '{} {} {}'.format(colname, op, repr(condvars['bound']))
+        cond = f'{colname} {op} {_old_repr(condvars["bound"])}'
     elif isinstance(op, tuple):  # double binary variable-constant
         cond = ('(lbound %s %s) & (%s %s rbound)'
                 % (op[0], colname, colname, op[1]))
@@ -640,14 +646,20 @@ class ScalarTableUsageTestCase(ScalarTableMixin, BaseTableUsageTestCase):
     def test_unsupported_object(self):
         """Using a condition with an unsupported object."""
 
-        self.assertRaises(TypeError, self.table.where, '[]')
+        self.assertRaises(
+            (TypeError, ValueError), self.table.where, '[]'
+        )
         self.assertRaises(TypeError, self.table.where, 'obj', {'obj': {}})
-        self.assertRaises(TypeError, self.table.where, 'c_bool < []')
+        self.assertRaises(
+            (TypeError, ValueError), self.table.where, 'c_bool < []'
+        )
 
     def test_unsupported_syntax(self):
         """Using a condition with unsupported syntax."""
 
-        self.assertRaises(TypeError, self.table.where, 'c_bool[0]')
+        self.assertRaises(
+            (TypeError, ValueError), self.table.where, 'c_bool[0]'
+        )
         self.assertRaises(TypeError, self.table.where, 'c_bool()')
         self.assertRaises(NameError, self.table.where, 'c_bool.__init__')
 

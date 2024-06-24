@@ -1,5 +1,6 @@
 import sys
 
+from packaging.version import parse as parse_version
 import numpy as np
 
 import tables as tb
@@ -51,7 +52,7 @@ class RangeTestCase(common.TempFileMixin, common.PyTablesTestCase):
         i = self.maxshort
         rec['var1'] = '%04d' % (i)
         rec['var2'] = i
-        rec['var3'] = i
+        rec['var3'] = np.array(i).astype('i2')
         rec['var4'] = float(i)
         rec['var5'] = float(i)
         rec['var6'] = float(i)
@@ -83,10 +84,11 @@ class RangeTestCase(common.TempFileMixin, common.PyTablesTestCase):
         i = self.maxshort
         rec['var1'] = '%04d' % (i)
         rec['var2'] = i
-        rec['var3'] = i % self.maxshort
+        rec['var3'] = np.array(i % self.maxshort).astype('i2')
         rec['var5'] = float(i)
 
-        with self.assertRaises(TypeError):
+        # Numpy 1.25 -> ValueError
+        with self.assertRaises((TypeError, ValueError)):
             rec['var4'] = "124c"
 
         rec['var6'] = float(i)
@@ -208,9 +210,8 @@ class ReadFloatTestCase(common.TestFileMixin, common.PyTablesTestCase):
                     ds = getattr(self.h5file.root, dtype)
                 self.assertIsInstance(ds, tb.UnImplemented)
             except AssertionError:
-                if not tb.utilsextension._broken_hdf5_long_double():
-                    ds = getattr(self.h5file.root, dtype)
-                    self.assertEqual(ds.dtype, "float64")
+                ds = getattr(self.h5file.root, dtype)
+                self.assertEqual(ds.dtype, "float64")
 
     def test05_read_quadprecision_float(self):
         # XXX: check
@@ -310,7 +311,10 @@ def suite():
     theSuite = common.unittest.TestSuite()
 
     for i in range(1):
-        theSuite.addTest(doctest.DocTestSuite(tb.atom))
+        # TODO: in numpy 2 the repr of various dtypes has changed breaking the
+        # doctests. When only numpy 2 is supported re-enable these tests.
+        if parse_version(np.__version__) < parse_version("2.dev0"):
+            theSuite.addTest(doctest.DocTestSuite(tb.atom))
         theSuite.addTest(common.unittest.makeSuite(AtomTestCase))
         theSuite.addTest(common.unittest.makeSuite(RangeTestCase))
         theSuite.addTest(common.unittest.makeSuite(DtypeTestCase))

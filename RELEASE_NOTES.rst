@@ -1,5 +1,5 @@
 =======================================
- Release notes for PyTables 3.7 series
+ Release notes for PyTables 3.9 series
 =======================================
 
 :Author: PyTables Developers
@@ -8,45 +8,179 @@
 .. py:currentmodule:: tables
 
 
-Changes from 3.6.1 to 3.7.0
+Changes from 3.9.1 to 3.9.2
 ===========================
-
-Improvements
-------------
-- Compatibility with Python 3.10, numpy 1.21 and HDF5 1.12.
-- Support for Python 3.5 has been dropped (:issue:`840` and :issue:`850`).
-- Windows: Significantly faster `import tables` PR #781.
-  Thanks to Christoph Gohlke.
-- Internal C-Blosc sources updated to 1.21.1 (:issue:`931`).
-  Note that, starting from C-Blosc 1.19 does not include the Snappy codec
-  sources anymore, so Snappy will be not available if you compile from
-  included sources; other packages (like conda or wheels),
-  may (or may not) include it.
-- Stop using appveyor and deprecated ci-helpers (closes :issue:`827`).
-- Switch to `git submodule` for the management of vendored c-blosc sources.
-- CI moved to GitHub Actions (GHA).
-- Drop Travis-CI.
-- Improved code formatting and notation consistency (:issue:`873`,
-  :issue:`868`, :issue:`865` thanks to Miroslav Šedivý).
-- Improve the use of modern Python including :mod:`pathlib`, f-strings
-  (:issue:`859`, :issue:`855`, :issue:`839` and :issue:`818`
-  thanks to Miroslav Šedivý).
-- Several improvements to wheels generation in CI
-  (thanks to Andreas Motl @amotl and Matthias @xmatthias).
-- Simplified management of version information.
-- Drop dependency on the deprecated distutils.
-- Modernize the setup script and add support for PEP517 (:issue:`907`).
 
 Bugfixes
 --------
-- Fix `pkg-config` (`setup.py`) for Python 3.9 on Debian.
-  Thanks to Marco Sulla PR #792.
-- Fix ROFileNode fails to return the `fileno()` (:issue:`633`).
-- Do not flush read only files (:issue:`915` thanks to @lrepiton).
+
+- Fix the assembly of returned slice data in Blosc2 NDim optimized slice reads
+  by using Blosc2's `b2nd_copy_buffer` (:PR:`1078`).  The bug only showed up
+  when the chunk did not fully cover the innermost dimension.  Add unit tests
+  to ckeck for regressions, along with foreign-generated files, and enable and
+  fix Blosc2 NDim tests which were not being run.  Thanks to Ivan Vilata.
+
+Improvements
+------------
+
+- PyTables wheels now use a threadsafe build of the HDF5 library
+  (:issue:`1075` and :PR:`1077`).  Concurrent reads should be possible with no
+  need for additional locking or monkey-patching of the file open function.
+  Thanks to Kiet Pham.
+- Partial support for the future NumPy 2, with some tests still failing
+  (:PR:`1068`).  Thanks to Thomas Grainger.
+- Relax the reading of Blosc2 NDim to cope with datasets stored with other
+  tools (:PR:`1072`), e.g. missing chunk rank/shape in filter values, having
+  HDF5 chunks where the Blosc2 super-chunk contains more than one inner chunk,
+  or chunks with data not padded to the full chunk size (example script and
+  tests included).  Also enhance checks, comments and logged messages.  Thanks
+  to Ivan Vilata.
 
 Other changes
 -------------
-- Drop the deprecated `hdf5Version` and `File.open_count`.
-- the :func:`get_tables_version` and :func:`get_hdf5_version` functions are
-  now deprecated please use the coresponding :data:`tables.__version__` and
-  :data:`tables.hdf5_version` instead.
+
+- Drop compatibility with the obsolete HDF5 1.8 API.  PyTables now requires at
+  least the 1.10 API (:PR:`1080`).  Thanks to Antonio Valentino.
+- Require python-blosc2 >= 2.3.0 or c-blosc2 >= 2.11.0 (which adds support for
+  the `b2nd_copy_buffer` function).
+- Use the main Conda Forge channel for Python 3.12 (:PR:`1066`).  Thanks to
+  Thomas Grainger.
+- Assorted fixes to the b2nd slicing benchmark.  Thanks to Ivan Vilata.
+- Assorted fixes to b2nd slicing optimization tips (:PR:`1069`).  Thanks to
+  Ivan Vilata.
+
+Thanks
+------
+
+In alphabetical order:
+
+- Antonio Valentino
+- Ivan Vilata
+- Kiet Pham
+- Thomas Grainger
+
+
+Changes from 3.9.0 to 3.9.1
+===========================
+
+- Minimum supported version for Python is 3.9 (see :issue:`1062`).
+
+
+Changes from 3.8.0 to 3.9.0
+===========================
+
+New features
+------------
+
+- Apply optimized slice read to Blosc2-compressed `CArray` and `EArray`, with
+  Blosc2 NDim 2-level partitioning for multidimensional arrays (:PR:`1056`).
+  See "Multidimensional slicing and chunk/block sizes" in the User's Guide.
+  Thanks to Marta Iborra and Ivan Vilata.  This development was funded by a
+  NumFOCUS grant.
+- Add basic API for column-level attributes as `Col._v_col_attrs` (:PR:`893`
+  and :issue:`821`).  Thanks to Jonathan Wheeler, Thorben Menne, Ezequiel
+  Cimadevilla Alvarez, odidev, Sander Roet, Antonio Valentino, Munehiro
+  Nishida, Zbigniew Jędrzejewski-Szmek, Laurent Repiton, xmatthias, Logan
+  Kilpatrick.
+
+Other changes
+-------------
+
+- Add support for the forthcoming Python 3.12 with binary wheels and automated
+  testing.
+- Drop wheels and automated testing for Python 3.8; users or distributions may
+  still build and test with Python 3.8 on their own (see :commit:`ae1e60e` and
+  :commit:`47f5946`).
+- New benchmark for ERA5 climate data.  Thanks to Óscar Guiñón.
+- New "100 trillion baby" benchmark.  Thanks to Francesc Alted.
+- New benchmark for querying meteorologic data.  Thanks to Francesc Alted.
+
+Improvements
+------------
+
+- Use `H5Dchunk_iter` (when available) to speed up walking over many chunks in
+  a very large table, as well as with random reads (:issue:`991`, :PR:`997`,
+  :PR:`999`).  Thanks to Francesc Alted and Mark Kittisopikul.
+- Improve `setup.py` (now using `pyproject.toml` as per PEP 518) and `blosc2`
+  discovery mechanism.  Blosc2 may be used both via python-blosc2 or system
+  c-blosc2 (:PR:`987`, :PR:`1000`, :issue:`998`, :PR:`1017`,
+  :PR:`1045`). Thanks to Antonio Valentino, Ben Greiner, Iwo-KX, nega.
+- Enable compatibility with Cython 3 (:PR:`1008` and :issue:`1003`).  Thanks
+  to Matus Valo and Michał Górny.
+- Set GitHub workflow permissions to least privileges (:PR:`1007`).  Thanks to
+  Joyce Brum.
+- Add `SECURITY.md` with security policy (:PR:`1012` and :issue:`1011`).
+  Thanks to Joyce Brum.
+- Handle py-cpuinfo missing in some platforms (:PR:`1013`).  Thanks to Sam
+  James.
+- Avoid NumPy >= 1.25 deprecations, use `numpy.all`, `numpy.any`,
+  etc. instead.  Thanks to Antonio Valentino.
+- Avoid C-related build warnings.  Thanks to Antonio Valentino.
+- Streamline CI wheel building & testing with `cibuildwheel`, more clear
+  distinctions between build and runtime dependencies.
+- Update included c-blosc to v1.21.5 (fixes SSE2/AVX build issue).
+- Require python-blosc2 >= 2.2.8 or c-blosc2 >= 2.10.4 (Python 3.12 support
+  and assorted fixes).
+- Update external libraries for CI-based wheel builds (:PR:`1018` and
+  :issue:`967`):
+
+  * hdf5 v1.14.2
+  * lz4 v1.9.4
+  * zlib v1.2.13
+
+Bugfixes
+--------
+
+- Fix crash in Blosc2 optimized path with large tables (:issue:`995` and
+  :PR:`996`).  Thanks to Francesc Alted.
+- Fix compatibility with NumExpr v2.8.5 (:PR:`1046`).  Thanks to Antonio
+  Valentino.
+- Fix build errors on Windows ARM64 (:PR:`989`).  Thanks to Cristoph Gohlke.
+- Fix `ptrepack` failures with external links (:issue:`938` and :PR:`990`).
+  Thanks to Adrian Altenhoff.
+- Replace stderr messages with Python warnings (:issue:`992` and :PR:`993`).
+  Thanks to Maximilian Linhoff.
+- Fixes to CI workflow and wheel building (:PR:`1009`, :PR:`1047`).  Thanks to
+  Antonio Valentino.
+- Fix garbled rendering of `File.get_node` docstring (:PR:`1021`).  Thanks to
+  Steffen Rehberg.
+- Fix open `extern "C"` block (:PR:`1026`).  Thanks to Ivan Vilata.
+- Fix Cython slice indexing under Python 3.12 (:PR:`1033`).  Thanks to
+  Zbigniew Jędrzejewski-Szmek.
+- Fix unsafe temporary file creation in benchmark (:PR:`1053`).  Thanks to Al
+  Arafat Tanin (Project Alpha-Omega).
+
+Thanks
+------
+
+In alphabetical order:
+
+- Adrian Altenhoff
+- Al Arafat Tanin
+- Antonio Valentino
+- Ben Greiner
+- Cristoph Gohlke
+- Ezequiel Cimadevilla Alvarez
+- Francesc Alted
+- Ivan Vilata
+- Iwo-KX
+- Jonathan Wheeler
+- Joyce Brum
+- Laurent Repiton
+- Logan Kilpatrick
+- Mark Kittisopikul
+- Marta Iborra
+- Matus Valo
+- Maximilian Linhoff
+- Michał Górny
+- Munehiro Nishida
+- nega
+- odidev
+- Óscar Guiñón
+- Sam James
+- Sander Roet
+- Seth Troisi
+- Steffen Rehberg
+- Thorben Menne
+- xmatthias
+- Zbigniew Jędrzejewski-Szmek

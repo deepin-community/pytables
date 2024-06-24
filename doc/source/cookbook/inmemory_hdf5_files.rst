@@ -46,8 +46,8 @@ one needs to specify to use the CORE driver::
 
     >>> import tables
     >>> h5file = tables.open_file("new_sample.h5", "w", driver="H5FD_CORE")
-    >>> import numpy
-    >>> a = h5file.create_array(h5file.root, "array", numpy.zeros((300, 300)))
+    >>> import numpy as np
+    >>> a = h5file.create_array(h5file.root, "array", np.zeros((300, 300)))
     >>> h5file.close()
 
 
@@ -95,8 +95,7 @@ Memory images of HDF5 files
 ===========================
 
 It is possible to get a memory image of an HDF5 file (see
-`HDF5 File Image Operations`_).  This feature is only available if PyTables
-is build against version 1.8.9 or newer of the HDF5 library.
+`HDF5 File Image Operations`_).
 
 In particular getting a memory image of an HDF5 file is possible only if the
 file has been opened with one of the following drivers: SEC2 (the default

@@ -1,0 +1,42 @@
+From: Antonio Valentino <antonio.valentino@tiscali.it>
+Date: Sun, 7 Apr 2024 06:53:27 +0000
+Subject: No python-blosc2
+
+Forwarded: not-needed
+---
+ pyproject.toml   | 4 ++--
+ requirements.txt | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/pyproject.toml b/pyproject.toml
+index b503ab6..774ec52 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -12,7 +12,7 @@ requires = [
+     # Included here for seamless wheel builds.
+     # Packagers can choose to replace it by externally provided
+     # c-blosc2 library and headers
+-    "blosc2 >=2.3.0",
++    # "blosc2 >=2.3.0",
+ ]
+ build-backend = "setuptools.build_meta"
+ # build-backend = "mesonpy"  # and replace ``setuptools`` above
+@@ -72,7 +72,7 @@ dependencies = [
+     "numexpr >= 2.6.2",
+     "packaging",
+     "py-cpuinfo",
+-    "blosc2 >= 2.3.0",
++    # "blosc2 >= 2.3.0",
+ ]
+ 
+ 
+diff --git a/requirements.txt b/requirements.txt
+index 242457a..b094cde 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -4,4 +4,4 @@ numpy>=1.19.0
+ numexpr>=2.6.2
+ packaging
+ py-cpuinfo
+-blosc2>=2.3.0
++# blosc2>=2.3.0

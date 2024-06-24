@@ -161,6 +161,87 @@ small or too large chunksize.  As always, experimenting prior to pass your
 application into production is your best ally.
 
 
+.. _multidimSlicing:
+
+Multidimensional slicing and chunk/block sizes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When working with multidimensional arrays, you may find yourself accessing
+array slices smaller than chunks.  In that case, reducing the chunksize to
+match your slices may result in too many chunks and large B-trees in memory,
+but avoiding that by using bigger chunks may make operations slow, as whole
+big chunks would need to be loaded in memory anyway just to access a small
+slice.  Compression may help by making the chunks smaller on disk, but the
+decompressed chunks in memory may still be big enough to make the slicing
+inefficient.
+
+To help with this scenario, PyTables supports Blosc2 NDim (b2nd) compression,
+which uses a 2-level partitioning of arrays into multidimensional chunks made
+of smaller multidimensional blocks; reading slices of such arrays is optimized
+by direct access to chunks (avoiding the slower HDF5 filter pipeline).  b2nd
+works better when the compressed chunk is big enough to minimize the number of
+chunks in the array, while still fitting in the CPU's L3 cache (and leaving
+some extra room), and the blocksize is such that any block is likely to fit
+both compressed and uncompressed in each CPU core's L2 cache.
+
+This last requirement of course depends on the data itself and the compression
+algorithm and parameters chosen.  The Blosc2 library uses some heuristics to
+choose a good enough blocksize given a compression algorithm and level.  Once
+you choose an algorithm which fits your data, you may use the program
+examples/get_blocksize.c in the C-Blosc2 package to get the default blocksize
+for the different levels of that compression algorithm (it already contains
+some sample output for zstd).  In the example benchmarks below, with the LZ4
+algorithm with shuffling and compression level 8, we got a blocksize of 2MB
+which fitted in the L2 cache of each of our CPU cores.
+
+With that compression setup, we ran the benchmark in
+bench/b2nd_compare_getslice.py, which compares the throughput of slicing a
+4-dimensional array of 50x100x300x250 long floats (2.8GB) along each of its
+dimensions for PyTables with flat slicing (via the HDF5 filter mechanism),
+PyTables with b2nd slicing (optimized via direct chunk access), and h5py
+(which also uses the HDF5 filter).  We repeated the benchmark with different
+values of the ``BLOSC_NTHREADS`` environment variable so as to find the best
+number of parallel Blosc2 threads (6 for our CPU).  The result for the
+original chunkshape of 10x25x50x50 is shown in :ref:`figure
+<b2ndSlicing-vs-filter-smallChunk>`.
+
+.. _b2ndSlicing-vs-filter-smallChunk:
+
+.. figure:: images/b2nd_getslice_small.png
+    :align: center
+
+    **Throughput for slicing a Blosc2-compressed array along its 4 dimensions
+    with PyTables filter, PyTables b2nd (optimized) and h5py, all using a
+    small chunk.**
+
+The optimized b2nd slicing of PyTables already provided some sizable speedups
+in comparison with flat slicing based on the HDF5 filter pipeline in the inner
+dimensions.  But the 4.8MB chunksize was probably too small for the CPU's L3
+cache of 36MB, causing extra overhead.  By proceeding to adjust the chunkshape
+to 10x25x150x100 (28.6MB), that fits in the L3 cache, the performance gains
+are palpable, as shown in :ref:`figure <b2ndSlicing-vs-filter-bigChunk>`.
+
+.. _b2ndSlicing-vs-filter-bigChunk:
+
+.. figure:: images/b2nd_getslice_big.png
+    :align: center
+
+    **Throughput for slicing a Blosc2-compressed array along its 4 dimensions
+    with PyTables filter, PyTables b2nd (optimized) and h5py, all using a big
+    chunk.**
+
+Choosing a better chunkshape not just provided up to 5x speedup for the
+PyTables optimized case, it also resulted in 3x-4x speedups compared to the
+performance of the HDF5 filter.
+
+Optimized b2nd slicing in PyTables has its limitations, though: it only works
+with contiguous slices (that is, with step 1 on every dimension) and on
+datasets with the same byte ordering as the host machine.  However, the
+performance gains may be worth the extra effort of choosing the right
+compression parameters and chunksizes when your use case is not affected by
+those limitations.
+
+
 .. _searchOptim:
 
 Accelerating your searches
@@ -170,10 +251,14 @@ Accelerating your searches
 
     Many of the explanations and plots in this section and the forthcoming
     ones still need to be updated to include Blosc (see
-    :ref:`[BLOSC] <BLOSC>`), the new and powerful compressor added in
-    PyTables 2.2 series.  You should expect it to be the fastest compressor
-    among all the described here, and its use is strongly recommended
-    whenever you need extreme speed and not a very high compression ratio.
+    :ref:`[BLOSC] <BLOSC>`) or Blosc2 (see :ref:`[BLOSC2] <BLOSC2>`),
+    the new and powerful compressors added in
+    PyTables 2.2 and PyTables 3.8 respectively.  You should expect them to be
+    the fastest compressors
+    among all the described here, and their use is strongly recommended
+    whenever you need extreme speed while keeping good compression ratios.
+    However, below you can still find some sections describing the advantages
+    of using Blosc/Blosc2 in PyTables.
 
 Searching in tables is one of the most common and time consuming operations
 that a typical user faces in the process of mining through his data.  Being
@@ -319,6 +404,78 @@ many typical functions, it is unlikely that you will be forced to use
 external regular selections in conditions of small to medium complexity.
 See :ref:`condition_syntax` for more information on in-kernel condition
 syntax.
+
+As mentioned before Blosc and Blosc2 can bring a lot of acceleration to your
+queries.  Blosc2 is the new generation of the Blosc compressor, and PyTables
+uses it in a way that complements the existing Blosc HDF5 filter.
+Just as comparison point, below there is a profile of 6 different
+in-kernel queries using the standard Zlib, Blosc and Blosc2 compressors:
+
+.. _inkernelPerformance-Zlib-Blosc-Blosc2:
+
+.. figure:: images/inkernel-zlib-blosc-blosc2.png
+    :align: center
+
+    **Times for 6 complex queries in a large table with 100 million rows.
+    Data comes from an actual set of meteorological measurements.**
+
+As you can see, Blosc, but specially Blosc2, can get much better performance
+than the Zlib compressor when doing complex queries.  Blosc can be up to
+6x faster, whereas Blosc2 can be more than 13x times faster (i.e. processing
+data at more than 8 GB/s).  Perhaps more interestingly, Blosc2 can make
+inkernel queries *faster* than using uncompressed data; and although it might
+seem that we are dealing with on-disk data, it is actually in memory because,
+after the first query, all the data has been cached in memory by the
+OS filesystem cache.  That also means that for actual data that is on-disk,
+the advantages of using Blosc/Blosc2 can be much more than this.
+
+In case you might want to compress as much as possible, Blosc and Blosc2 allow
+to use different compression codecs underneath.  For example, in the same
+:ref:`figure <inkernelPerformance-Zlib-Blosc-Blosc2>` that we are discussing,
+one can see another line where Blosc2 is used in combination with
+Zstd, and this combination is providing a compression ratio of 9x; this is
+actually larger than the one achieved by the Zlib compressor embedded in HDF5,
+which is 7.6x --BTW, the compression ratio of Blosc2 using the default compressor
+is 7.4x, not that far from standalone Zlib.
+
+In this case, the Blosc2 + Zstd combination still makes inkernel queries
+faster than with no using compression; so with Blosc2 you can have the best of the
+two worlds: top-class speed while keeping good compression ratios (see
+:ref:`figure <CompressionRatio-Zlib-Blosc-Blosc2>`).
+
+.. _CompressionRatio-Zlib-Blosc-Blosc2:
+
+.. figure:: images/cratio-zlib-blosc-blosc2.png
+    :align: center
+
+    **Compression ratio for different codecs and the 100 million rows table.
+    Data comes from an actual set of meteorological measurements.**
+
+Furthermore, and despite that the dataset is 3.1 GB in size, the memory
+consumption after the 6 queries is still less than 250 MB.
+That means that you can do queries of large, on-disk datasets with machines
+with much less RAM than the dataset and still get all the speed that the disk
+can provide.
+
+But that is not all, provided that Blosc2 can be faster than memory, it
+can accelerate memory access too.  For example, in
+:ref:`figure <inkernelPerformance-vs-pandas>` we can see that, when the
+HDF5 file is in the operating system cache, inkernel queries using Blosc2
+can be very close in performance even when compared with pandas.  That
+is because the boost provided by Blosc2 compression almost compensate the
+overhead of HDF5 and the filesystem layers.
+
+.. _inkernelPerformance-vs-pandas:
+
+.. figure:: images/inkernel-vs-pandas.png
+    :align: center
+
+    **Performance for 6 complex queries in a large table with 100 million rows.
+    Both PyTables and pandas use the numexpr engine behind the scenes.**
+
+You can see more info about Blosc2 and how it collaborates with HDF5 for
+achieving such a high I/O speed in our blog at:
+https://www.blosc.org/posts/blosc2-pytables-perf/
 
 
 Indexed searches
@@ -886,82 +1043,6 @@ much improved compression level), it is a good thing to have such a filter
 enabled by default in the battle for discovering redundancy when you want to
 compress your data, just as PyTables does.
 
-
-Using Psyco
------------
-Psyco (see :ref:`[PSYCO] <PSYCO>`) is a kind of specialized compiler for
-Python that typically accelerates Python applications with no change in
-source code. You can think of Psyco as a kind of just-in-time (JIT) compiler,
-a little bit like Java's, that emits machine code on the fly instead of
-interpreting your Python program step by step. The result is that your
-unmodified Python programs run faster.
-
-Psyco is very easy to install and use, so in most scenarios it is worth to
-give it a try. However, it only runs on Intel 386 architectures, so if you
-are using other architectures, you are out of luck (and, moreover, it seems
-that there are no plans to support other platforms).  Besides, with the
-addition of flexible (and very fast) in-kernel queries (by the way, they
-cannot be optimized at all by Psyco), the use of Psyco will only help in
-rather few scenarios.  In fact, the only important situation that you might
-benefit right now from using Psyco (I mean, in PyTables contexts) is for
-speeding-up the write speed in tables when using the Row interface (see
-:ref:`RowClassDescr`).  But again, this latter case can also be accelerated
-by using the :meth:`Table.append` method and building your own buffers [4]_.
-
-As an example, imagine that you have a small script that reads and selects
-data over a series of datasets, like this::
-
-    def read_file(filename):
-        "Select data from all the tables in filename"
-        fileh = open_file(filename, mode = "r")
-        result = []
-        for table in fileh("/", 'Table'):
-            result = [p['var3'] for p in table if p['var2'] <= 20]
-        fileh.close()
-        return result
-
-    if __name__=="__main__":
-        print(read_file("myfile.h5"))
-
-In order to accelerate this piece of code, you can rewrite your main program
-to look like::
-
-    if __name__=="__main__":
-        import psyco
-        psyco.bind(read_file)
-        print(read_file("myfile.h5"))
-
-That's all!  From now on, each time that you execute your Python script,
-Psyco will deploy its sophisticated algorithms so as to accelerate your
-calculations.
-
-You can see in the graphs :ref:`Figure 24 <psycoWriteComparison>` and
-:ref:`Figure 25 <psycoReadComparison>` how much I/O speed improvement you can
-get by using Psyco. By looking at this figures you can get an idea if these
-improvements are of your interest or not. In general, if you are not going to
-use compression you will take advantage of Psyco if your tables are medium
-sized (from a thousand to a million rows), and this advantage will disappear
-progressively when the number of rows grows well over one million. However if
-you use compression, you will probably see improvements even beyond this
-limit (see :ref:`compressionIssues`).
-As always, there is no substitute for experimentation with your own dataset.
-
-.. _psycoWriteComparison:
-
-.. figure:: images/write-medium-psyco-nopsyco-comparison.png
-    :align: center
-
-    **Figure 24. Writing tables with/without Psyco.**
-
-
-.. _psycoReadComparison:
-
-.. figure:: images/read-medium-psyco-nopsyco-comparison.png
-    :align: center
-
-    **Figure 25. Reading tables with/without Psyco.**
-
-
 .. _LRUOptim:
 
 Getting the most from the node LRU cache
@@ -1132,7 +1213,4 @@ support for these filters.
 .. [3] Some users reported that the typical improvement with real
        data is between a factor 1.5x and 2.5x over the already compressed
        datasets.
-
-.. [4] So, there is not much point in using Psyco
-       with recent versions of PyTables anymore.
 

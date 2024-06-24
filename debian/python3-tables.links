@@ -5,6 +5,7 @@ usr/share/python-tables/tests/Tables_lzo2.h5                 usr/lib/python3/dis
 usr/share/python-tables/tests/Tables_lzo2_shuffle.h5         usr/lib/python3/dist-packages/tables/tests/Tables_lzo2_shuffle.h5
 usr/share/python-tables/tests/array_mdatom.h5                usr/lib/python3/dist-packages/tables/tests/array_mdatom.h5
 usr/share/python-tables/tests/attr-u16.h5                    usr/lib/python3/dist-packages/tables/tests/attr-u16.h5
+usr/share/python-tables/tests/b2nd-no-chunkshape.h5          usr/lib/python3/dist-packages/tables/tests/b2nd-no-chunkshape.h5
 usr/share/python-tables/tests/blosc_bigendian.h5             usr/lib/python3/dist-packages/tables/tests/blosc_bigendian.h5
 usr/share/python-tables/tests/bug-idx.h5                     usr/lib/python3/dist-packages/tables/tests/bug-idx.h5
 usr/share/python-tables/tests/elink.h5                       usr/lib/python3/dist-packages/tables/tests/elink.h5
@@ -49,3 +50,4 @@ usr/share/python-tables/tests/test_ref_array2.mat            usr/lib/python3/dis
 usr/share/python-tables/nodes/tests/test_filenode_v1.h5      usr/lib/python3/dist-packages/tables/nodes/tests/test_filenode_v1.h5
 usr/share/python-tables/nodes/tests/test_filenode.xbm        usr/lib/python3/dist-packages/tables/nodes/tests/test_filenode.xbm
 usr/share/python-tables/nodes/tests/test_filenode.dat        usr/lib/python3/dist-packages/tables/nodes/tests/test_filenode.dat
+

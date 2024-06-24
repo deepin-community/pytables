@@ -2,6 +2,4 @@
 0002-use-local-mathjax.patch
 0003-remove-gtags.patch
 0004-Skip-index-backcompat-tests-on-bingendian.patch
-0005-Fix-compatibility-with-numpy-1.22.patch
-0006-Compatibility-with-sphinx-7.1.patch
-0007-Compatibility-with-numexpr-v2.8.5.patch
+0005-No-python-blosc2.patch

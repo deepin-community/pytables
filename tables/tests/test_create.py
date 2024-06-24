@@ -1,4 +1,4 @@
-"""This test unit checks object creation funtions, like open_file,
+"""This test unit checks object creation functions, like open_file,
 create_table, create_array or create_group.
 
 It also checks:
@@ -293,14 +293,11 @@ class FiltersTreeTestCase(common.TempFileMixin, common.PyTablesTestCase):
             ea1.append(var1List)
             ea2.append(var3List)
 
-            # Finally a couple of VLArrays too
-            vla1 = self.h5file.create_vlarray(
-                group, 'vlarray1', tb.StringAtom(itemsize=4), "col 1")
-            vla2 = self.h5file.create_vlarray(
-                group, 'vlarray2', tb.Int16Atom(), "col 3")
-            # And fill them with some values
-            vla1.append(var1List)
-            vla2.append(var3List)
+            # Finally a couple of carrays too
+            vla1 = self.h5file.create_carray(
+                group, 'carray1', tb.StringAtom(itemsize=4), (2,))
+            vla2 = self.h5file.create_carray(
+                group, 'carray2', tb.Int16Atom(), (2,))
 
             # Create a new group (descendant of group)
             if j == 1:  # The second level
@@ -336,7 +333,7 @@ class FiltersTreeTestCase(common.TempFileMixin, common.PyTablesTestCase):
         # The next nodes have to have the same filter properties as
         # self.filters
         nodelist = [
-            '/table1', '/group0/earray1', '/group0/vlarray1', '/group0',
+            '/table1', '/group0/earray1', '/group0/carray1', '/group0',
         ]
         for node in nodelist:
             obj = self.h5file.get_node(node)
@@ -364,7 +361,7 @@ class FiltersTreeTestCase(common.TempFileMixin, common.PyTablesTestCase):
         # gfilters
         nodelist = [
             '/group0/group1', '/group0/group1/earray1',
-            '/group0/group1/vlarray1',
+            '/group0/group1/carray1',
             '/group0/group1/table1', '/group0/group1/group2/table1',
         ]
         for node in nodelist:
@@ -395,7 +392,7 @@ class FiltersTreeTestCase(common.TempFileMixin, common.PyTablesTestCase):
         nodelist = [
             '/group0/group1/group2/group3',
             '/group0/group1/group2/group3/earray1',
-            '/group0/group1/group2/group3/vlarray1',
+            '/group0/group1/group2/group3/carray1',
             '/group0/group1/group2/group3/table1',
             '/group0/group1/group2/group3/group4',
         ]
@@ -446,7 +443,7 @@ class FiltersTreeTestCase(common.TempFileMixin, common.PyTablesTestCase):
         # The next nodes have to have the same filter properties as
         # self.filters
         nodelist = [
-            '/table1', '/group0/earray1', '/group0/vlarray1', '/group0',
+            '/table1', '/group0/earray1', '/group0/carray1', '/group0',
         ]
         for node in nodelist:
             object_ = self.h5file.get_node(node)
@@ -474,7 +471,7 @@ class FiltersTreeTestCase(common.TempFileMixin, common.PyTablesTestCase):
         # gfilters
         nodelist = [
             '/group0/group1', '/group0/group1/earray1',
-            '/group0/group1/vlarray1',
+            '/group0/group1/carray1',
             '/group0/group1/table1', '/group0/group1/group2/table1',
         ]
         for node in nodelist:
@@ -503,7 +500,7 @@ class FiltersTreeTestCase(common.TempFileMixin, common.PyTablesTestCase):
         nodelist = [
             '/group0/group1/group2/group3',
             '/group0/group1/group2/group3/earray1',
-            '/group0/group1/group2/group3/vlarray1',
+            '/group0/group1/group2/group3/carray1',
             '/group0/group1/group2/group3/table1',
             '/group0/group1/group2/group3/group4',
         ]
@@ -678,9 +675,6 @@ class FiltersCaseBloscZstd(FiltersTreeTestCase):
 
 @common.unittest.skipIf(not common.blosc_avail,
                         'BLOSC compression library not available')
-@common.unittest.skipIf(
-    common.blosc_version < common.min_blosc_bitshuffle_version,
-    f'BLOSC >= {common.min_blosc_bitshuffle_version} required')
 class FiltersCaseBloscBitShuffle(FiltersTreeTestCase):
     filters = tb.Filters(shuffle=False, complevel=1, complib="blosc:blosclz")
     gfilters = tb.Filters(complevel=5, shuffle=False, bitshuffle=True,
@@ -1759,8 +1753,6 @@ class DefaultDriverTestCase(common.TempFileMixin, common.PyTablesTestCase):
         self.assertEqual(root.table2.cols.var2.dtype, tb.FloatCol().dtype)
 
 
-@common.unittest.skipIf(common.hdf5_version < Version("1.8.9"),
-                        "requires HDF5 >= 1.8,9")
 class Sec2DriverTestCase(DefaultDriverTestCase):
     DRIVER = "H5FD_SEC2"
     open_kwargs = dict(driver=DRIVER, **DefaultDriverTestCase.DRIVER_PARAMS)
@@ -1771,8 +1763,6 @@ class Sec2DriverTestCase(DefaultDriverTestCase):
         self.assertEqual([i for i in image[:4]], [137, 72, 68, 70])
 
 
-@common.unittest.skipIf(common.hdf5_version < Version("1.8.9"),
-                        "requires HDF5 >= 1.8,9")
 class StdioDriverTestCase(DefaultDriverTestCase):
     DRIVER = "H5FD_STDIO"
     open_kwargs = dict(driver=DRIVER, **DefaultDriverTestCase.DRIVER_PARAMS)
@@ -1783,8 +1773,6 @@ class StdioDriverTestCase(DefaultDriverTestCase):
         self.assertEqual([i for i in image[:4]], [137, 72, 68, 70])
 
 
-@common.unittest.skipIf(common.hdf5_version < Version("1.8.9"),
-                        "requires HDF5 >= 1.8,9")
 class CoreDriverTestCase(DefaultDriverTestCase):
     DRIVER = "H5FD_CORE"
     open_kwargs = dict(driver=DRIVER, **DefaultDriverTestCase.DRIVER_PARAMS)
@@ -2012,8 +2000,6 @@ class CoreDriverNoBackingStoreTestCase(common.PyTablesTestCase):
         # ensure that there is no change on the file on disk
         self.assertEqual(hexdigest, self._get_digest(self.h5fname))
 
-    @common.unittest.skipIf(common.hdf5_version < Version("1.8.9"),
-                            'HDF5 >= "1.8.9" required')
     def test_get_file_image(self):
         self.h5file = tb.open_file(self.h5fname, mode="w",
                                    driver=self.DRIVER,
@@ -2155,8 +2141,6 @@ class StreamDriverTestCase(NotSpportedDriverTestCase):
     DRIVER = "H5FD_STREAM"
 
 
-@common.unittest.skipIf(common.hdf5_version < Version("1.8.9"),
-                        'HDF5 >= "1.8.9" required')
 class InMemoryCoreDriverTestCase(common.PyTablesTestCase):
     DRIVER = "H5FD_CORE"
 
