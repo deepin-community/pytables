@@ -16,57 +16,6 @@ typedef npy_cdouble npy_complex256;
 #endif
 
 /* ---------------------------------------------------------------- */
-
-#ifdef WIN32
-#include <windows.h>
-
-/* This routine is meant to detect whether a dynamic library can be
-   loaded on Windows. This is only way to detect its presence without
-   harming the user.
-*/
-int getLibrary(char *libname) {
-    HINSTANCE hinstLib;
-
-    /* Load the dynamic library */
-    hinstLib = LoadLibrary(TEXT(libname));
-
-    if (hinstLib != NULL) {
-      /* Free the dynamic library */
-      FreeLibrary(hinstLib);
-      return 0;
-    }
-    else {
-      return -1;
-    }
-}
-
-#else  /* Unix platforms */
-#include <dlfcn.h>
-
-/* Routine to detect the existance of shared libraries in UNIX. This
-   has to be checked in MacOSX. However, this is not used right now in
-   utilsExtension.pyx because UNIX does not complain when trying to
-   load an extension library that depends on a shared library that it
-   is not in the system (python raises just the ImportError). */
-int getLibrary(char *libname) {
-    void *hinstLib;
-
-    /* Load the dynamic library */
-    hinstLib = dlopen(libname, RTLD_LAZY);
-
-    if (hinstLib != NULL) {
-      /* Free the dynamic library */
-      dlclose(hinstLib);
-      return 0;
-    }
-    else {
-      return -1;
-    }
-}
-
-
-#endif  /* Win32 */
-
 herr_t set_cache_size(hid_t file_id, size_t cache_size) {
 #if H5_VERS_MAJOR == 1 && H5_VERS_MINOR >= 7
   /* MSVS2005 chokes on declarations after statements */
@@ -765,8 +714,8 @@ hid_t create_ieee_complex64(const char *byteorder) {
     return float_id;
   }
 
-  H5Tinsert(complex_id, "r", HOFFSET(npy_complex64, real), float_id);
-  H5Tinsert(complex_id, "i", HOFFSET(npy_complex64, imag), float_id);
+  H5Tinsert(complex_id, "r", 0, float_id);
+  H5Tinsert(complex_id, "i", 4, float_id);
   H5Tclose(float_id);
   return complex_id;
 }
@@ -790,8 +739,8 @@ hid_t create_ieee_complex128(const char *byteorder) {
     return float_id;
   }
 
-  H5Tinsert(complex_id, "r", HOFFSET(npy_complex128, real), float_id);
-  H5Tinsert(complex_id, "i", HOFFSET(npy_complex128, imag), float_id);
+  H5Tinsert(complex_id, "r", 0, float_id);
+  H5Tinsert(complex_id, "i", 8, float_id);
   H5Tclose(float_id);
   return complex_id;
 }
@@ -822,8 +771,8 @@ hid_t create_ieee_complex192(const char *byteorder) {
     return err;
   }
 
-  H5Tinsert(complex_id, "r", HOFFSET(npy_complex192, real), float_id);
-  H5Tinsert(complex_id, "i", HOFFSET(npy_complex192, imag), float_id);
+  H5Tinsert(complex_id, "r", 0, float_id);
+  H5Tinsert(complex_id, "i", 12, float_id);
   H5Tclose(float_id);
   return complex_id;
 }
@@ -854,8 +803,8 @@ hid_t create_ieee_complex256(const char *byteorder) {
     return err;
   }
 
-  H5Tinsert(complex_id, "r", HOFFSET(npy_complex256, real), float_id);
-  H5Tinsert(complex_id, "i", HOFFSET(npy_complex256, imag), float_id);
+  H5Tinsert(complex_id, "r", 0, float_id);
+  H5Tinsert(complex_id, "i", 16, float_id);
   H5Tclose(float_id);
   return complex_id;
 }
@@ -983,4 +932,3 @@ herr_t pt_H5Pset_fapl_windows(hid_t fapl_id)
 }
 
 #endif /* H5_HAVE_WINDOWS */
-

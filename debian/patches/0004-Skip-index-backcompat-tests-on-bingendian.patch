@@ -8,7 +8,7 @@ Forwarded: not-needed
  1 file changed, 4 insertions(+)
 
 diff --git a/tables/tests/test_index_backcompat.py b/tables/tests/test_index_backcompat.py
-index a3f404f..3dc94c4 100644
+index ced5c2b..9d718e8 100644
 --- a/tables/tests/test_index_backcompat.py
 +++ b/tables/tests/test_index_backcompat.py
 @@ -1,7 +1,9 @@
@@ -21,7 +21,7 @@ index a3f404f..3dc94c4 100644
  class IndexesTestCase(common.TestFileMixin, common.PyTablesTestCase):
  
      def setUp(self):
-@@ -139,11 +141,13 @@ class IndexesTestCase(common.TestFileMixin, common.PyTablesTestCase):
+@@ -138,11 +140,13 @@ class IndexesTestCase(common.TestFileMixin, common.PyTablesTestCase):
  
  
  # Check indexes from PyTables version 2.0

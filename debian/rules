@@ -40,8 +40,8 @@ endif
 override_dh_strip:
 	dh_strip -ppython3-tables-lib
 
-override_dh_installchangelogs:
-	dh_installchangelogs -k RELEASE_NOTES.rst
+# override_dh_installchangelogs:
+# 	dh_installchangelogs -k RELEASE_NOTES.rst
 
 override_dh_compress:
 	dh_compress -X.txt -X.pdf -X.py -X.h5

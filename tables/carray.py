@@ -1,17 +1,25 @@
 """Here is defined the CArray class."""
 
+from __future__ import annotations
+
 import sys
+from typing import TYPE_CHECKING
+from collections.abc import Sequence
 
 import numpy as np
+import numpy.typing as npt
 
 from .atom import Atom
 from .array import Array
 from .utils import correct_byteorder, SizeType
 
+if TYPE_CHECKING:
+    from .group import Group
+    from .filters import Filters
 
 # default version for CARRAY objects
 # obversion = "1.0"    # Support for time & enumerated datatypes.
-obversion = "1.1"    # Numeric and numarray flavors are gone.
+obversion = "1.1"  # Numeric and numarray flavors are gone.
 
 
 class CArray(Array):
@@ -76,7 +84,6 @@ class CArray(Array):
 
     Examples
     --------
-
     See below a small example of the use of the `CArray` class.
     The code is available in ``examples/carray1.py``::
 
@@ -118,25 +125,33 @@ class CArray(Array):
     """
 
     # Class identifier.
-    _c_classid = 'CARRAY'
+    _c_classid = "CARRAY"
 
-    def __init__(self, parentnode, name,
-                 atom=None, shape=None,
-                 title="", filters=None,
-                 chunkshape=None, byteorder=None,
-                 _log=True, track_times=True):
+    def __init__(
+        self,
+        parentnode: Group,
+        name: str,
+        atom: Atom | None = None,
+        shape: Sequence[int] | None = None,
+        title: str = "",
+        filters: Filters | None = None,
+        chunkshape: tuple[int, ...] | None = None,
+        byteorder: str | None = None,
+        _log: bool = True,
+        track_times: bool = True,
+    ) -> None:
 
         self.atom = atom
         """An `Atom` instance representing the shape, type of the atomic
         objects to be saved.
         """
-        self.shape = None
+        self.shape: tuple[int, ...] | None = None
         """The shape of the stored array."""
         self.extdim = -1  # `CArray` objects are not enlargeable by default
         """The index of the enlargeable dimension."""
 
         # Other private attributes
-        self._v_version = None
+        self._v_version: str | None = None
         """The object version of this array."""
         self._v_new = new = atom is not None
         """Is this the first time the node has been created?"""
@@ -148,37 +163,40 @@ class CArray(Array):
         """Private storage for the `chunkshape` property of the leaf."""
 
         # Miscellaneous iteration rubbish.
-        self._start = None
+        self._start: int | None = None
         """Starting row for the current iteration."""
-        self._stop = None
+        self._stop: int | None = None
         """Stopping row for the current iteration."""
-        self._step = None
+        self._step: int | None = None
         """Step size for the current iteration."""
-        self._nrowsread = None
+        self._nrowsread: int | None = None
         """Number of rows read up to the current state of iteration."""
-        self._startb = None
+        self._startb: int | None = None
         """Starting row for current buffer."""
-        self._stopb = None
+        self._stopb: int | None = None
         """Stopping row for current buffer. """
-        self._row = None
+        self._row: int | None = None
         """Current row in iterators (sentinel)."""
         self._init = False
         """Whether we are in the middle of an iteration or not (sentinel)."""
-        self.listarr = None
+        self.listarr: npt.ArrayLike | None = None
         """Current buffer in iterators."""
 
         if new:
             if not isinstance(atom, Atom):
-                raise ValueError("atom parameter should be an instance of "
-                                 "tables.Atom and you passed a %s." %
-                                 type(atom))
+                raise ValueError(
+                    "atom parameter should be an instance of "
+                    "tables.Atom and you passed a %s." % type(atom)
+                )
             if shape is None:
                 raise ValueError("you must specify a non-empty shape")
             try:
                 shape = tuple(shape)
             except TypeError:
-                raise TypeError("`shape` parameter must be a sequence "
-                                "and you passed a %s" % type(shape))
+                raise TypeError(
+                    "`shape` parameter must be a sequence "
+                    "and you passed a %s" % type(shape)
+                )
             self.shape = tuple(SizeType(s) for s in shape)
 
             if chunkshape is not None:
@@ -187,37 +205,40 @@ class CArray(Array):
                 except TypeError:
                     raise TypeError(
                         "`chunkshape` parameter must be a sequence "
-                        "and you passed a %s" % type(chunkshape))
+                        "and you passed a %s" % type(chunkshape)
+                    )
                 if len(shape) != len(chunkshape):
-                    raise ValueError(f"the shape ({shape}) and chunkshape "
-                                     f"({chunkshape}) ranks must be equal.")
+                    raise ValueError(
+                        f"the shape ({shape}) and chunkshape "
+                        f"({chunkshape}) ranks must be equal."
+                    )
                 elif min(chunkshape) < 1:
-                    raise ValueError("chunkshape parameter cannot have "
-                                     "zero-dimensions.")
+                    raise ValueError(
+                        "chunkshape parameter cannot have " "zero-dimensions."
+                    )
                 self._v_chunkshape = tuple(SizeType(s) for s in chunkshape)
 
         # The `Array` class is not abstract enough! :(
-        super(Array, self).__init__(parentnode, name, new, filters,
-                                    byteorder, _log, track_times)
+        super(Array, self).__init__(
+            parentnode, name, new, filters, byteorder, _log, track_times
+        )
 
-    def _g_create(self):
+    def _g_create(self) -> int:
         """Create a new array in file (specific part)."""
-
         if min(self.shape) < 1:
-            raise ValueError(
-                "shape parameter cannot have zero-dimensions.")
+            raise ValueError("shape parameter cannot have zero-dimensions.")
         # Finish the common part of creation process
         return self._g_create_common(self.nrows)
 
-    def _g_create_common(self, expectedrows):
+    def _g_create_common(self, expectedrows: int) -> int:
         """Create a new array in file (common part)."""
-
         self._v_version = obversion
 
         if self._v_chunkshape is None:
             # Compute the optimal chunk size
             self._v_chunkshape = self._calc_chunkshape(
-                expectedrows, self.rowsize, self.atom.size)
+                expectedrows, self.rowsize, self.atom.size
+            )
         # Compute the optimal nrowsinbuf
         self.nrowsinbuf = self._calc_nrowsinbuf()
         # Correct the byteorder if needed
@@ -236,10 +257,20 @@ class CArray(Array):
 
         return self._v_objectid
 
-    def _g_copy_with_stats(self, group, name, start, stop, step,
-                           title, filters, chunkshape, _log, **kwargs):
+    def _g_copy_with_stats(
+        self,
+        group: Group,
+        name: str,
+        start: int,
+        stop: int,
+        step: int,
+        title: str,
+        filters: Filters | None,
+        chunkshape: tuple[int, ...] | None,
+        _log: bool,
+        **kwargs,
+    ) -> tuple[CArray, int]:
         """Private part of Leaf.copy() for each kind of leaf."""
-
         (start, stop, step) = self._process_range_read(start, stop, step)
         maindim = self.maindim
         shape = list(self.shape)
@@ -252,9 +283,16 @@ class CArray(Array):
         # when copying buffers
         self._v_convert = False
         # Build the new CArray object
-        object = CArray(group, name, atom=self.atom, shape=shape,
-                        title=title, filters=filters, chunkshape=chunkshape,
-                        _log=_log)
+        obj = CArray(
+            group,
+            name,
+            atom=self.atom,
+            shape=shape,
+            title=title,
+            filters=filters,
+            chunkshape=chunkshape,
+            _log=_log,
+        )
         # Start the copy itself
         for start2 in range(start, stop, step * nrowsinbuf):
             # Save the records on disk
@@ -270,9 +308,9 @@ class CArray(Array):
             # The next line should be generalised if, in the future,
             # maindim is designed to be different from 0 in CArrays.
             # See ticket #199.
-            object[start3:stop3] = self.__getitem__(tuple(slices))
+            obj[start3:stop3] = self.__getitem__(tuple(slices))
         # Activate the conversion again (default)
         self._v_convert = True
         nbytes = np.prod(self.shape, dtype=SizeType) * self.atom.size
 
-        return (object, nbytes)
+        return (obj, nbytes)

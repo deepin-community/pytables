@@ -1,15 +1,16 @@
-from pathlib import Path
-from time import perf_counter as clock
 import random
-import numpy as np
+from time import perf_counter as clock
+from pathlib import Path
+
 import h5py
+import numpy as np
 
 random.seed(2)
 
 
 def show_stats(explain, tref):
     "Show the used memory (only works for Linux 2.6.x)."
-    for line in Path('/proc/self/status').read_text().splitlines():
+    for line in Path("/proc/self/status").read_text().splitlines():
         if line.startswith("VmSize:"):
             vmsize = int(line.split()[1])
         elif line.startswith("VmRSS:"):
@@ -37,14 +38,15 @@ def populate(f, nlevels):
     for i in range(nlevels):
         g["DS1"] = arr
         g["DS2"] = arr
-        g.create_group('group2_')
-        g = g.create_group('group')
+        g.create_group("group2_")
+        g = g.create_group("group")
 
 
 def getnode(f, nlevels, niter, range_):
     for i in range(niter):
         nlevel = random.randrange(
-            (nlevels - range_) / 2, (nlevels + range_) / 2)
+            (nlevels - range_) / 2, (nlevels + range_) / 2
+        )
         groupname = ""
         for i in range(nlevel):
             groupname += "/group"
@@ -52,7 +54,7 @@ def getnode(f, nlevels, niter, range_):
         f[groupname]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     nlevels = 1024
     niter = 1000
     range_ = 256
@@ -62,18 +64,18 @@ if __name__ == '__main__':
 
     if doprofile:
         import pstats
-        import cProfile as prof
+        import cProfile
 
     if profile:
         tref = clock()
     if profile:
         show_stats("Abans de crear...", tref)
-    f = h5py.File("/tmp/deep-tree.h5", 'w')
+    f = h5py.File("/tmp/deep-tree.h5", "w")
     if doprofile:
-        prof.run('populate(f, nlevels)', 'populate.prof')
-        stats = pstats.Stats('populate.prof')
+        cProfile.run("populate(f, nlevels)", "populate.prof")
+        stats = pstats.Stats("populate.prof")
         stats.strip_dirs()
-        stats.sort_stats('time', 'calls')
+        stats.sort_stats("time", "calls")
         if verbose:
             stats.print_stats()
         else:

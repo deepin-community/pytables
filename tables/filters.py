@@ -1,38 +1,43 @@
 """Functionality related with filters in a PyTables file."""
 
-import warnings
-import numpy as np
+from __future__ import annotations
 
-from . import (
-    utilsextension,
-    blosc_compressor_list,
-    blosc_compcode_to_compname,
-    blosc2_compressor_list,
-    blosc2_compcode_to_compname,
-)
-from .exceptions import FiltersWarning
+import warnings
+from typing import Any, Literal, TYPE_CHECKING
+
+import numpy as np
 from packaging.version import Version
 
-import tables as tb
+from . import utilsextension
+from .exceptions import FiltersWarning
 
-blosc_version = Version(tb.which_lib_version("blosc")[1])
-blosc2_version = Version(tb.which_lib_version("blosc2")[1])
+if TYPE_CHECKING:
+    from .leaf import Leaf
+
+blosc_version = Version(utilsextension.which_lib_version("blosc")[1])
+blosc2_version = Version(utilsextension.which_lib_version("blosc2")[1])
+blosc_compcode_to_compname = utilsextension.blosc_compcode_to_compname_
+blosc2_compcode_to_compname = utilsextension.blosc2_compcode_to_compname_
 
 
-__docformat__ = 'reStructuredText'
+__docformat__ = "reStructuredText"
 """The format of documentation strings in this module."""
 
-all_complibs = ['zlib', 'lzo', 'bzip2', 'blosc', 'blosc2']
-all_complibs += ['blosc:%s' % cname for cname in blosc_compressor_list()]
-all_complibs += ['blosc2:%s' % cname for cname in blosc2_compressor_list()]
+all_complibs = ["zlib", "lzo", "bzip2", "blosc", "blosc2"]
+all_complibs += [
+    f"blosc:{cname}" for cname in utilsextension.blosc_compressor_list()
+]
+all_complibs += [
+    f"blosc2:{cname}" for cname in utilsextension.blosc2_compressor_list()
+]
 
 
 """List of all compression libraries."""
 
-foreign_complibs = ['szip']
+foreign_complibs = ["szip"]
 """List of known but unsupported compression libraries."""
 
-default_complib = 'zlib'
+default_complib = "zlib"
 """The default compression library."""
 
 
@@ -104,7 +109,6 @@ class Filters:
 
     Examples
     --------
-
     This is a small example on using the Filters class::
 
         import numpy as np
@@ -130,7 +134,7 @@ class Filters:
     Fletcher32 checksum filter as well. See the output of this example::
 
         Result Array:
-        /earray (EArray(3, 2), fletcher32, shuffle, blosc(1)) 'A growable array'
+        /earray (EArray(3, 2), fletcher32, shuffle, blosc(1)) 'A growable ...
         type = float32
         shape = (3, 2)
         itemsize = 4
@@ -165,11 +169,12 @@ class Filters:
     """
 
     @property
-    def shuffle_bitshuffle(self):
+    def shuffle_bitshuffle(self) -> Literal[0, 1, 2]:
         """Encode NoShuffle (0), Shuffle (1) and BitShuffle (2) filters."""
-        if (self.shuffle and self.bitshuffle):
+        if self.shuffle and self.bitshuffle:
             raise ValueError(
-                "Shuffle and BitShuffle cannot be active at the same time")
+                "Shuffle and BitShuffle cannot be active at the same time"
+            )
         if not (self.shuffle or self.bitshuffle):
             return 0
         if self.shuffle:
@@ -178,58 +183,67 @@ class Filters:
             return 2
 
     @classmethod
-    def _from_leaf(cls, leaf):
+    def _from_leaf(cls, leaf: Leaf) -> Filters:
         # Get a dictionary with all the filters
         parent = leaf._v_parent
-        filters_dict = utilsextension.get_filters(parent._v_objectid,
-                                                  leaf._v_name)
+        filters_dict = utilsextension.get_filters(
+            parent._v_objectid, leaf._v_name
+        )
         if filters_dict is None:
             filters_dict = {}  # not chunked
 
         # Keyword arguments are all off
-        kwargs = dict(complevel=0, shuffle=False, bitshuffle=False,
-                      fletcher32=False, least_significant_digit=None,
-                      _new=False)
-        for (name, values) in filters_dict.items():
-            if name == 'deflate':
-                name = 'zlib'
+        kwargs = {
+            "complevel": 0,
+            "shuffle": False,
+            "bitshuffle": False,
+            "fletcher32": False,
+            "least_significant_digit": None,
+            "_new": False,
+        }
+        for name, values in filters_dict.items():
+            if name == "deflate":
+                name = "zlib"
             if name in all_complibs:
-                kwargs['complib'] = name
-                if name in ('blosc', 'blosc2'):
-                    kwargs['complevel'] = values[4]
+                kwargs["complib"] = name
+                if name in ("blosc", "blosc2"):
+                    kwargs["complevel"] = values[4]
                     if values[5] == 1:
                         # Shuffle filter is internal to blosc/blosc2
-                        kwargs['shuffle'] = True
+                        kwargs["shuffle"] = True
                     elif values[5] == 2:
                         # Shuffle filter is internal to blosc/blosc2
-                        kwargs['bitshuffle'] = True
+                        kwargs["bitshuffle"] = True
                     # From Blosc 1.3 on, parameter 6 is used for the compressor
                     if len(values) > 6:
                         if name == "blosc":
                             cname = blosc_compcode_to_compname(values[6])
-                            kwargs['complib'] = "blosc:%s" % cname
+                            kwargs["complib"] = "blosc:%s" % cname
                         else:
                             cname = blosc2_compcode_to_compname(values[6])
-                            kwargs['complib'] = "blosc2:%s" % cname
+                            kwargs["complib"] = "blosc2:%s" % cname
                 else:
-                    kwargs['complevel'] = values[0]
+                    kwargs["complevel"] = values[0]
             elif name in foreign_complibs:
-                kwargs['complib'] = name
-                kwargs['complevel'] = 1  # any nonzero value will do
-            elif name in ['shuffle', 'fletcher32']:
+                kwargs["complib"] = name
+                kwargs["complevel"] = 1  # any nonzero value will do
+            elif name in ["shuffle", "fletcher32"]:
                 kwargs[name] = True
         return cls(**kwargs)
 
     @classmethod
-    def _unpack(cls, packed):
+    def _unpack(cls, packed: int) -> Filters:
         """Create a new `Filters` object from a packed version.
 
         >>> Filters._unpack(0)
-        Filters(complevel=0, shuffle=False, bitshuffle=False, fletcher32=False, least_significant_digit=None)
+        Filters(complevel=0, shuffle=False, bitshuffle=False, \
+fletcher32=False, least_significant_digit=None)
         >>> Filters._unpack(0x101)
-        Filters(complevel=1, complib='zlib', shuffle=False, bitshuffle=False, fletcher32=False, least_significant_digit=None)
+        Filters(complevel=1, complib='zlib', shuffle=False, \
+bitshuffle=False, fletcher32=False, least_significant_digit=None)
         >>> Filters._unpack(0x30109)
-        Filters(complevel=9, complib='zlib', shuffle=True, bitshuffle=False, fletcher32=True, least_significant_digit=None)
+        Filters(complevel=9, complib='zlib', shuffle=True, \
+bitshuffle=False, fletcher32=True, least_significant_digit=None)
         >>> Filters._unpack(0x3010A)
         Traceback (most recent call last):
           ...
@@ -240,40 +254,39 @@ class Filters:
         ValueError: invalid compression library id: 0
 
         """
-
-        kwargs = {'_new': False}
+        kwargs = {"_new": False}
 
         # Byte 0: compression level.
-        kwargs['complevel'] = complevel = packed & 0xff
+        kwargs["complevel"] = complevel = packed & 0xFF
         packed >>= 8
 
         # Byte 1: compression library id (0 for none).
         if complevel > 0:
-            complib_id = int(packed & 0xff)
+            complib_id = int(packed & 0xFF)
             if not (0 < complib_id <= len(all_complibs)):
-                raise ValueError("invalid compression library id: %d"
-                                 % complib_id)
-            kwargs['complib'] = all_complibs[complib_id - 1]
+                raise ValueError(
+                    f"invalid compression library id: {complib_id}"
+                )
+            kwargs["complib"] = all_complibs[complib_id - 1]
         packed >>= 8
 
         # Byte 2: parameterless filters.
-        kwargs['shuffle'] = packed & _shuffle_flag
-        kwargs['bitshuffle'] = packed & _bitshuffle_flag
-        kwargs['fletcher32'] = packed & _fletcher32_flag
+        kwargs["shuffle"] = packed & _shuffle_flag
+        kwargs["bitshuffle"] = packed & _bitshuffle_flag
+        kwargs["fletcher32"] = packed & _fletcher32_flag
         has_rounding = packed & _rounding_flag
         packed >>= 8
 
         # Byte 3: least significant digit.
         if has_rounding:
-            kwargs['least_significant_digit'] = np.int8(packed & 0xff)
+            kwargs["least_significant_digit"] = np.int8(packed & 0xFF)
         else:
-            kwargs['least_significant_digit'] = None
+            kwargs["least_significant_digit"] = None
 
         return cls(**kwargs)
 
-    def _pack(self):
+    def _pack(self) -> np.int64:
         """Pack the `Filters` object into a 64-bit NumPy integer."""
-
         packed = np.int64(0)
 
         # Byte 3: least significant digit.
@@ -303,9 +316,18 @@ class Filters:
 
         return packed
 
-    def __init__(self, complevel=0, complib=default_complib,
-                 shuffle=True, bitshuffle=False, fletcher32=False,
-                 least_significant_digit=None, _new=True):
+    def __init__(
+        self,
+        complevel: int = 0,
+        complib: Literal[
+            "zlib", "lzo", "bzip2", "blosc", "blosc2"
+        ] = default_complib,
+        shuffle: bool = True,
+        bitshuffle: bool = False,
+        fletcher32: bool = False,
+        least_significant_digit: int | None = None,
+        _new: bool = True,
+    ) -> None:
 
         if not (0 <= complevel <= 9):
             raise ValueError("compression level must be between 0 and 9")
@@ -316,11 +338,14 @@ class Filters:
                 raise ValueError(
                     "compression library ``%s`` is not supported; "
                     "it must be one of: %s"
-                    % (complib, ", ".join(all_complibs)))
+                    % (complib, ", ".join(all_complibs))
+                )
             if utilsextension.which_lib_version(complib) is None:
-                warnings.warn("compression library ``%s`` is not available; "
-                              "using ``%s`` instead"
-                              % (complib, default_complib), FiltersWarning)
+                warnings.warn(
+                    "compression library ``%s`` is not available; "
+                    "using ``%s`` instead" % (complib, default_complib),
+                    FiltersWarning,
+                )
                 complib = default_complib  # always available
 
         complevel = int(complevel)
@@ -354,9 +379,11 @@ class Filters:
         self.bitshuffle = bitshuffle
         """Whether the *BitShuffle* filter is active or not."""
 
-        if (self.complib and
-                self.bitshuffle and
-                not self.complib.startswith('blosc')):
+        if (
+            self.complib
+            and self.bitshuffle
+            and not self.complib.startswith("blosc")
+        ):
             raise ValueError("BitShuffle can only be used inside Blosc/Blosc2")
 
         if self.shuffle and self.bitshuffle:
@@ -369,22 +396,22 @@ class Filters:
         self.least_significant_digit = least_significant_digit
         """The least significant digit to which data shall be truncated."""
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         args = []
         if self.complevel >= 0:  # meaningful compression level
-            args.append(f'complevel={self.complevel}')
+            args.append(f"complevel={self.complevel}")
         if self.complevel != 0:  # compression enabled (-1 or > 0)
-            args.append(f'complib={self.complib!r}')
-        args.append(f'shuffle={self.shuffle}')
-        args.append(f'bitshuffle={self.bitshuffle}')
-        args.append(f'fletcher32={self.fletcher32}')
-        args.append(f'least_significant_digit={self.least_significant_digit}')
+            args.append(f"complib={self.complib!r}")
+        args.append(f"shuffle={self.shuffle}")
+        args.append(f"bitshuffle={self.bitshuffle}")
+        args.append(f"fletcher32={self.fletcher32}")
+        args.append(f"least_significant_digit={self.least_significant_digit}")
         return f'{self.__class__.__name__}({", ".join(args)})'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         if not isinstance(other, self.__class__):
             return False
         for attr in self.__dict__:
@@ -398,7 +425,7 @@ class Filters:
     #    return hash((self.__class__, self.complevel, self.complib,
     #                 self.shuffle, self.bitshuffle, self.fletcher32))
 
-    def copy(self, **override):
+    def copy(self, **override) -> Filters:
         """Get a copy of the filters, possibly overriding some arguments.
 
         Constructor arguments to be overridden must be passed as keyword
@@ -420,27 +447,28 @@ class Filters:
             ValueError: compression library ``None`` is not supported...
             >>> filters3 = filters1.copy(complevel=1, complib='zlib')
             >>> print(filters1)
-            Filters(complevel=0, shuffle=False, bitshuffle=False, fletcher32=False, least_significant_digit=None)
+            Filters(complevel=0, shuffle=False, bitshuffle=False, \
+fletcher32=False, least_significant_digit=None)
             >>> print(filters3)
-            Filters(complevel=1, complib='zlib', shuffle=False, bitshuffle=False, fletcher32=False, least_significant_digit=None)
+            Filters(complevel=1, complib='zlib', shuffle=False, \
+bitshuffle=False, fletcher32=False, least_significant_digit=None)
             >>> filters1.copy(foobar=42) #doctest: +ELLIPSIS
             Traceback (most recent call last):
             ...
-            TypeError: ...__init__() got an unexpected keyword argument 'foobar'
+            TypeError: ...__init__() got an unexpected keyword argument ...
 
         """
-
         newargs = self.__dict__.copy()
         newargs.update(override)
         return self.__class__(**newargs)
 
 
-def _test():
+def _test() -> None:
     """Run ``doctest`` on this module."""
-
     import doctest
+
     doctest.testmod()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _test()

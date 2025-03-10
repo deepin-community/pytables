@@ -3,3 +3,4 @@
 0003-remove-gtags.patch
 0004-Skip-index-backcompat-tests-on-bingendian.patch
 0005-No-python-blosc2.patch
+0006-Build-with-numpy-1.x.patch

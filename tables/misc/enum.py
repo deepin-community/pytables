@@ -16,8 +16,12 @@ standard variables and constants are more adequate.
 
 """
 
+from __future__ import annotations
 
-__docformat__ = 'reStructuredText'
+from typing import Any, NoReturn
+from collections.abc import Generator
+
+__docformat__ = "reStructuredText"
 """The format of documentation strings in this module."""
 
 
@@ -101,54 +105,59 @@ class Enum:
 
     """
 
-    def __init__(self, enum):
+    def __init__(
+        self, enum: list[str] | tuple[str, ...] | dict[str, Any] | Enum
+    ) -> None:
         mydict = self.__dict__
 
-        mydict['_names'] = {}
-        mydict['_values'] = {}
+        mydict["_names"] = {}
+        mydict["_values"] = {}
 
         if isinstance(enum, list) or isinstance(enum, tuple):
-            for (value, name) in enumerate(enum):  # values become 0, 1, 2...
+            for value, name in enumerate(enum):  # values become 0, 1, 2...
                 self._check_and_set_pair(name, value)
         elif isinstance(enum, dict):
-            for (name, value) in enum.items():
+            for name, value in enum.items():
                 self._check_and_set_pair(name, value)
         elif isinstance(enum, Enum):
-            for (name, value) in enum._names.items():
+            for name, value in enum._names.items():
                 self._check_and_set_pair(name, value)
         else:
-            raise TypeError("""\
-enumerations can only be created from \
-sequences, mappings and other enumerations""")
+            raise TypeError(
+                "enumerations can only be created from sequences, "
+                "mappings and other enumerations"
+            )
 
-    def _check_and_set_pair(self, name, value):
+    def _check_and_set_pair(self, name: str, value: Any) -> None:
         """Check validity of enumerated value and insert it into type."""
-
         names = self._names
         values = self._values
 
         if not isinstance(name, str):
             raise TypeError(
-                f"name of enumerated value is not a string: {name!r}")
-        if name.startswith('_'):
+                f"name of enumerated value is not a string: {name!r}"
+            )
+        if name.startswith("_"):
             raise ValueError(
-                "name of enumerated value can not start with ``_``: %r"
-                % name)
+                f"name of enumerated value can not start with ``_``: {name!r}"
+            )
         # This check is only necessary with a sequence base object.
         if name in names:
             raise ValueError(
-                "enumerated values contain duplicate names: %r" % name)
+                f"enumerated values contain duplicate names: {name!r}"
+            )
         # This check is only necessary with a mapping base object.
         if value in values:
             raise ValueError(
-                "enumerated values contain duplicate concrete values: %r"
-                % value)
+                f"enumerated values contain duplicate concrete values: "
+                f"{value!r}"
+            )
 
         names[name] = value
         values[value] = name
         self.__dict__[name] = value
 
-    def __getitem__(self, name):
+    def __getitem__(self, name: str) -> Any:
         """Get the concrete value of the enumerated value with that name.
 
         The name of the enumerated value must be a string. If there is no value
@@ -156,7 +165,6 @@ sequences, mappings and other enumerations""")
 
         Examples
         --------
-
         Let ``enum`` be an enumerated type defined as:
 
         >>> enum = Enum({'T0': 0, 'T1': 2, 'T2': 5})
@@ -171,21 +179,20 @@ sequences, mappings and other enumerations""")
         KeyError: "no enumerated value with that name: 'foo'"
 
         """
-
         try:
             return self._names[name]
         except KeyError:
             raise KeyError(f"no enumerated value with that name: {name!r}")
 
-    def __setitem__(self, name, value):
-        """This operation is forbidden."""
+    def __setitem__(self, name: Any, value: Any) -> NoReturn:
+        """Forbidden operation."""
         raise IndexError("operation not allowed")
 
-    def __delitem__(self, name):
-        """This operation is forbidden."""
+    def __delitem__(self, name: Any) -> NoReturn:
+        """Forbidden operation."""
         raise IndexError("operation not allowed")
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         """Get the concrete value of the enumerated value with that name.
 
         The name of the enumerated value must be a string. If there is no value
@@ -207,22 +214,21 @@ sequences, mappings and other enumerations""")
         AttributeError: no enumerated value with that name: 'foo'
 
         """
-
         try:
             return self[name]
         except KeyError as ke:
             raise AttributeError(*ke.args)
 
-    def __setattr__(self, name, value):
-        """This operation is forbidden."""
+    def __setattr__(self, name: Any, value: Any) -> NoReturn:
+        """Forbidden operation."""
         raise AttributeError("operation not allowed")
 
-    def __delattr__(self, name):
-        """This operation is forbidden."""
+    def __delattr__(self, name: Any) -> NoReturn:
+        """Forbidden operation."""
         raise AttributeError("operation not allowed")
 
-    def __contains__(self, name):
-        """Is there an enumerated value with that name in the type?
+    def __contains__(self, name: str) -> bool:
+        """Return True if the Enum has a value with the specified name.
 
         If the enumerated type has an enumerated value with that name, True is
         returned.  Otherwise, False is returned. The name must be a string.
@@ -252,13 +258,13 @@ sequences, mappings and other enumerations""")
         TypeError: name of enumerated value is not a string: 2
 
         """
-
         if not isinstance(name, str):
             raise TypeError(
-                f"name of enumerated value is not a string: {name!r}")
+                f"name of enumerated value is not a string: {name!r}"
+            )
         return name in self._names
 
-    def __call__(self, value, *default):
+    def __call__(self, value: Any, *default: Any) -> Any:
         """Get the name of the enumerated value with that concrete value.
 
         If there is no value with that concrete value in the enumeration and a
@@ -286,16 +292,16 @@ sequences, mappings and other enumerations""")
         ValueError: no enumerated value with that concrete value: 42
 
         """
-
         try:
             return self._values[value]
         except KeyError:
             if len(default) > 0:
                 return default[0]
             raise ValueError(
-                f"no enumerated value with that concrete value: {value!r}")
+                f"no enumerated value with that concrete value: {value!r}"
+            )
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return the number of enumerated values in the enumerated type.
 
         Examples
@@ -304,10 +310,9 @@ sequences, mappings and other enumerations""")
         10
 
         """
-
         return len(self._names)
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[Any]:
         """Iterate over the enumerated values.
 
         Enumerated values are returned as (name, value) pairs *in no particular
@@ -322,18 +327,16 @@ sequences, mappings and other enumerations""")
         True
 
         """
-
         yield from self._names.items()
 
-    def __eq__(self, other):
-        """Is the other enumerated type equivalent to this one?
+    def __eq__(self, other: Enum) -> bool:
+        """Return True if `other` equivalent to this enumerated type.
 
         Two enumerated types are equivalent if they have exactly the same
         enumerated values (i.e. with the same names and concrete values).
 
         Examples
         --------
-
         Let ``enum*`` be enumerated types defined as:
 
         >>> enum1 = Enum({'T0': 0, 'T1': 2})
@@ -367,13 +370,12 @@ sequences, mappings and other enumerations""")
         False
 
         """
-
         if not isinstance(other, Enum):
             return False
         return self._names == other._names
 
-    def __ne__(self, other):
-        """Is the `other` enumerated type different from this one?
+    def __ne__(self, other: Enum) -> bool:
+        """Return True if `other` is different from this enumerated type.
 
         Two enumerated types are different if they don't have exactly
         the same enumerated values (i.e. with the same names and
@@ -381,7 +383,6 @@ sequences, mappings and other enumerations""")
 
         Examples
         --------
-
         Let ``enum*`` be enumerated types defined as:
 
         >>> enum1 = Enum({'T0': 0, 'T1': 2})
@@ -405,17 +406,17 @@ sequences, mappings and other enumerations""")
         True
 
         """
-
         return not self.__eq__(other)
 
     # XXX: API incompatible change for PyTables 3 line
     # Overriding __eq__ blocks inheritance of __hash__ in 3.x
     # def __hash__(self):
     #    return hash((self.__class__, tuple(self._names.items())))
-    def __repr__(self):
-        """Return the canonical string representation of the enumeration. The
-        output of this method can be evaluated to give a new enumeration object
-        that will compare equal to this one.
+    def __repr__(self) -> str:
+        """Return the canonical string representation of the enumeration.
+
+        The output of this method can be evaluated to give a new
+        enumeration object that will compare equal to this one.
 
         Examples
         --------
@@ -423,14 +424,14 @@ sequences, mappings and other enumerations""")
         "Enum({'name': 10})"
 
         """
-
-        return 'Enum(%s)' % self._names
+        return f"Enum({self._names})"
 
 
 def _test():
     import doctest
+
     return doctest.testmod()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     _test()

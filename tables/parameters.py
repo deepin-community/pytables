@@ -2,8 +2,7 @@
 
 import os as _os
 
-
-__docformat__ = 'reStructuredText'
+__docformat__ = "reStructuredText"
 """The format of documentation strings in this module."""
 
 _KB = 1024
@@ -72,7 +71,7 @@ efficient or not."""
 
 ENABLE_EVERY_CYCLES = 50
 """The number of cycles in which a cache will be forced to be
-(re-)enabled, irregardingly of the hit ratio. This will provide a chance
+(re-)enabled, irregardless of the hit ratio. This will provide a chance
 for checking if we are in a better scenario for doing caching again."""
 
 LOWEST_HIT_RATIO = 0.6
@@ -150,7 +149,7 @@ METADATA_CACHE_SIZE = 1 * _MB  # 1 MB is the default for HDF5
 # number of leaves, try increasing this value and see if it fits better
 # for you. Please report back your feedback.
 # Using a lower value than 64 provides a workaround for issue #977.
-NODE_CACHE_SLOTS = 32  
+NODE_CACHE_SLOTS = 32
 """Maximum number of nodes to be kept in the metadata cache.
 
 It is the number of nodes to be kept in the metadata cache. Least recently
@@ -162,7 +161,7 @@ if they are not in the cache.
 
 Negative value means that all the touched nodes will be kept in an
 internal dictionary.  This is the faster way to load/retrieve nodes.
-However, and in order to avoid a large memory comsumption, the user will
+However, and in order to avoid a large memory consumption, the user will
 be warned when the number of loaded nodes will reach the
 ``-NODE_CACHE_SLOTS`` value.
 
@@ -212,7 +211,7 @@ your machine. In general, it is a good idea to set this to the number of
 cores in your machine or, when your machine has many of them (e.g. > 8),
 perhaps stay at 8 at maximum.  In general, 4 threads is a good tradeoff."""
 
-MAX_BLOSC_THREADS = 1    # 1 is safe for concurrency
+MAX_BLOSC_THREADS = 1  # 1 is safe for concurrency
 """The maximum number of threads that PyTables should use internally in
 Blosc.  If `None`, it is automatically set to the number of cores in
 your machine.  For applications that use several PyTables instances
@@ -416,7 +415,7 @@ using the :meth:`tables.File.get_file_image` method.
 
 """
 
-DRIVER_SPLIT_META_EXT = '-m.h5'
+DRIVER_SPLIT_META_EXT = "-m.h5"
 """The extension for the metadata file used by the H5FD_SPLIT driver.
 
 If this option is passed to the :func:`tables.openFile` function along
@@ -429,7 +428,7 @@ by replacing '%s' with the name passed as the first parameter instead.
 
 """
 
-DRIVER_SPLIT_RAW_EXT = '-r.h5'
+DRIVER_SPLIT_RAW_EXT = "-r.h5"
 """The extension for the raw data file used by the H5FD_SPLIT driver.
 
 If this option is passed to the :func:`tables.openFile` function along

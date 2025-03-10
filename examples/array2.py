@@ -1,4 +1,5 @@
 import numpy as np
+
 import tables as tb
 
 # Open a new empty HDF5 file
@@ -13,7 +14,7 @@ print("  with shape: ==>", a.shape)
 print("  and dtype ==>", a.dtype)
 
 # Save it on the HDF5 file
-hdfarray = fileh.create_array(root, 'carray', a, "Float array")
+hdfarray = fileh.create_array(root, "carray", a, "Float array")
 
 # Get metadata on the previously saved array
 print()

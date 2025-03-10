@@ -28,8 +28,8 @@ Misc variables:
 """
 
 import os
-import platform
 import sys
+import platform
 import warnings
 from collections import namedtuple
 
@@ -41,70 +41,175 @@ import pickle
 
 import numpy as np
 
-from .exceptions import HDF5ExtError, DataTypeWarning
-
-from .utils import (check_file_access, byteorders, correct_byteorder,
-  SizeType)
-
 from .atom import Atom
-
+from .utils import check_file_access, byteorders, correct_byteorder, SizeType
+from .exceptions import HDF5ExtError, DataTypeWarning
 from .description import descr_from_dtype
-
 from .utilsextension import (
-  encode_filename, set_blosc_max_threads, set_blosc2_max_threads,
-  atom_to_hdf5_type, atom_from_hdf5_type, hdf5_to_np_ext_type, create_nested_type,
-  pttype_to_hdf5, pt_special_kinds, npext_prefixes_to_ptkinds, hdf5_class_to_string,
-  platform_byteorder, get_filters)
-
+    encode_filename,
+    set_blosc_max_threads,
+    set_blosc2_max_threads,
+    atom_to_hdf5_type,
+    atom_from_hdf5_type,
+    hdf5_to_np_ext_type,
+    create_nested_type,
+    pttype_to_hdf5,
+    pt_special_kinds,
+    npext_prefixes_to_ptkinds,
+    hdf5_class_to_string,
+    platform_byteorder,
+    get_filters,
+)
 
 # Types, constants, functions, classes & other objects from everywhere
+
+from numpy cimport (
+    import_array,
+    ndarray,
+    npy_intp,
+    PyArray_BYTES,
+    PyArray_DATA,
+    PyArray_DIMS,
+    PyArray_NDIM,
+    PyArray_STRIDE,
+)
 from libc.stdlib cimport malloc, free
 from libc.string cimport strdup, strlen
-from numpy cimport (import_array, ndarray, npy_intp, PyArray_BYTES, PyArray_DATA,
-    PyArray_DIMS, PyArray_NDIM, PyArray_STRIDE)
-from cpython.bytes cimport (PyBytes_AsString, PyBytes_FromStringAndSize,
-    PyBytes_Check)
+from cpython.bytes cimport (
+    PyBytes_AsString,
+    PyBytes_FromStringAndSize,
+    PyBytes_Check,
+)
 from cpython.unicode cimport PyUnicode_DecodeUTF8
 
+from .definitions cimport (
+    uintptr_t,
+    hid_t,
+    herr_t,
+    hsize_t,
+    hvl_t,
+    uint32_t,
+    H5S_seloper_t,
+    H5D_FILL_VALUE_UNDEFINED,
+    H5O_TYPE_UNKNOWN,
+    H5O_TYPE_GROUP,
+    H5O_TYPE_DATASET,
+    H5O_TYPE_NAMED_DATATYPE,
+    H5L_TYPE_ERROR,
+    H5L_TYPE_HARD,
+    H5L_TYPE_SOFT,
+    H5L_TYPE_EXTERNAL,
+    H5T_class_t,
+    H5T_sign_t,
+    H5T_NATIVE_INT,
+    H5T_cset_t,
+    H5T_CSET_ASCII,
+    H5T_CSET_UTF8,
+    H5F_SCOPE_GLOBAL,
+    H5F_ACC_TRUNC,
+    H5F_ACC_RDONLY,
+    H5F_ACC_RDWR,
+    H5P_DEFAULT,
+    H5P_FILE_ACCESS,
+    H5P_FILE_CREATE,
+    H5T_DIR_DEFAULT,
+    H5S_SELECT_SET,
+    H5S_SELECT_AND,
+    H5S_SELECT_NOTB,
+    H5Fcreate,
+    H5Fopen,
+    H5Fclose,
+    H5Fflush,
+    H5Fget_vfd_handle,
+    H5Fget_filesize,
+    H5Fget_create_plist,
+    H5Gcreate,
+    H5Gopen,
+    H5Gclose,
+    H5Ldelete,
+    H5Lmove,
+    H5Dopen,
+    H5Dclose,
+    H5Dread,
+    H5Dwrite,
+    H5Dget_type,
+    H5Dget_create_plist,
+    H5Dget_space,
+    H5Dvlen_reclaim,
+    H5Dget_storage_size,
+    H5Dvlen_get_buf_size,
+    H5Dget_chunk_info_by_coord,
+    haddr_t,
+    HADDR_UNDEF,
+    H5Dread_chunk,
+    H5Dwrite_chunk,
+    H5Tget_native_type,
+    H5Tclose,
+    H5Tis_variable_str,
+    H5Tget_sign,
+    H5Adelete,
+    H5T_BITFIELD,
+    H5T_INTEGER,
+    H5T_FLOAT,
+    H5T_STRING,
+    H5Tget_order,
+    H5Pcreate,
+    H5Pset_cache,
+    H5Pclose,
+    H5Pget_userblock,
+    H5Pset_userblock,
+    H5Pset_fapl_sec2,
+    H5Pset_fapl_log,
+    H5Pset_fapl_stdio,
+    H5Pset_fapl_core,
+    H5Pset_fapl_split,
+    H5Pget_obj_track_times,
+    H5Sselect_all,
+    H5Sselect_elements,
+    H5Sselect_hyperslab,
+    H5Screate_simple,
+    H5Sclose,
+    H5Oget_info,
+    H5O_info_t,
+    H5ATTRset_attribute,
+    H5ATTRset_attribute_string,
+    H5ATTRget_attribute,
+    H5ATTRget_attribute_string,
+    H5ATTRget_attribute_vlen_string_array,
+    H5ATTRfind_attribute,
+    H5ATTRget_type_ndims,
+    H5ATTRget_dims,
+    H5ARRAYget_ndims,
+    H5ARRAYget_info,
+    set_cache_size,
+    get_objinfo,
+    get_linkinfo,
+    Giterate,
+    Aiterate,
+    H5UIget_info,
+    get_len_of_range,
+    conv_float64_timeval32,
+    truncate_dset,
+    H5_HAVE_DIRECT_DRIVER,
+    pt_H5Pset_fapl_direct,
+    H5_HAVE_WINDOWS_DRIVER,
+    pt_H5Pset_fapl_windows,
+    H5_HAVE_IMAGE_FILE,
+    H5Pset_file_image,
+    H5Fget_file_image,
+    H5Tget_size,
+    hobj_ref_t,
+)
 
-from .definitions cimport (uintptr_t, hid_t, herr_t, hsize_t, hvl_t,
-  H5S_seloper_t, H5D_FILL_VALUE_UNDEFINED,
-  H5O_TYPE_UNKNOWN, H5O_TYPE_GROUP, H5O_TYPE_DATASET, H5O_TYPE_NAMED_DATATYPE,
-  H5L_TYPE_ERROR, H5L_TYPE_HARD, H5L_TYPE_SOFT, H5L_TYPE_EXTERNAL,
-  H5T_class_t, H5T_sign_t, H5T_NATIVE_INT,
-  H5T_cset_t, H5T_CSET_ASCII, H5T_CSET_UTF8,
-  H5F_SCOPE_GLOBAL, H5F_ACC_TRUNC, H5F_ACC_RDONLY, H5F_ACC_RDWR,
-  H5P_DEFAULT, H5P_FILE_ACCESS, H5P_FILE_CREATE, H5T_DIR_DEFAULT,
-  H5S_SELECT_SET, H5S_SELECT_AND, H5S_SELECT_NOTB,
-  H5Fcreate, H5Fopen, H5Fclose, H5Fflush, H5Fget_vfd_handle, H5Fget_filesize,
-  H5Fget_create_plist,
-  H5Gcreate, H5Gopen, H5Gclose, H5Ldelete, H5Lmove,
-  H5Dopen, H5Dclose, H5Dread, H5Dwrite, H5Dget_type, H5Dget_create_plist,
-  H5Dget_space, H5Dvlen_reclaim, H5Dget_storage_size, H5Dvlen_get_buf_size,
-  H5Tget_native_type, H5Tclose, H5Tis_variable_str, H5Tget_sign,
-  H5Adelete, H5T_BITFIELD, H5T_INTEGER, H5T_FLOAT, H5T_STRING, H5Tget_order,
-  H5Pcreate, H5Pset_cache, H5Pclose, H5Pget_userblock, H5Pset_userblock,
-  H5Pset_fapl_sec2, H5Pset_fapl_log, H5Pset_fapl_stdio, H5Pset_fapl_core,
-  H5Pset_fapl_split, H5Pget_obj_track_times,
-  H5Sselect_all, H5Sselect_elements, H5Sselect_hyperslab,
-  H5Screate_simple, H5Sclose,
-  H5Oget_info, H5O_info_t,
-  H5ATTRset_attribute, H5ATTRset_attribute_string,
-  H5ATTRget_attribute, H5ATTRget_attribute_string,
-  H5ATTRget_attribute_vlen_string_array,
-  H5ATTRfind_attribute, H5ATTRget_type_ndims, H5ATTRget_dims,
-  H5ARRAYget_ndims, H5ARRAYget_info,
-  set_cache_size, get_objinfo, get_linkinfo, Giterate, Aiterate, H5UIget_info,
-  get_len_of_range, conv_float64_timeval32, truncate_dset,
-  H5_HAVE_DIRECT_DRIVER, pt_H5Pset_fapl_direct,
-  H5_HAVE_WINDOWS_DRIVER, pt_H5Pset_fapl_windows,
-  H5_HAVE_IMAGE_FILE, H5Pset_file_image, H5Fget_file_image,
-  H5Tget_size, hobj_ref_t)
 
 cdef int H5T_CSET_DEFAULT = 16
 
-from .utilsextension cimport malloc_dims, get_native_type, cstr_to_pystr, load_reference
-
+from .utilsextension cimport (
+    malloc_dims,
+    get_native_type,
+    cstr_to_pystr,
+    load_reference,
+)
 
 #-------------------------------------------------------------------
 
@@ -1172,6 +1277,82 @@ cdef class Leaf(Node):
       self.disk_type_id = -1
     super()._g_new(where, name, init)
 
+  def _g_chunk_info(self, ndarray coords):
+    """Get storage information about chunk at `coords`.
+
+    Return ``(filter_mask, offset, size)``, where items are ``None`` if the
+    chunk is missing.
+
+    """
+    cdef herr_t ret
+    cdef hsize_t *offset
+    cdef unsigned filter_mask
+    cdef haddr_t addr
+    cdef hsize_t size
+
+    # Get the pointer to the buffer data area of the coords array
+    with nogil:
+      offset = <hsize_t *>PyArray_DATA(coords)
+      ret = H5Dget_chunk_info_by_coord(self.dataset_id, offset,
+                                       &filter_mask, &addr, &size)
+    if ret < 0:
+      raise HDF5ExtError("Problems getting chunk info for ``%s``"
+                         % self._v_pathname)
+    return ((filter_mask, addr, size) if addr != HADDR_UNDEF
+            else (None, None, None))
+
+  def _g_read_chunk(self, ndarray coords, ndarray out):
+    """Read the raw chunk at `coords` (into `out`).
+
+    Return a new array of bytes if `out` is ``None``, `out` itself otherwise.
+    Return ``None`` if the chunk is missing.
+
+    """
+    cdef ndarray rarr
+    cdef herr_t ret
+    cdef hsize_t *offset
+    cdef uint32_t filters = 0
+    cdef void *rbuf
+
+    _, addr, size = self._g_chunk_info(coords)
+    if addr is None:
+      return None  # missing chunk
+    if out is not None and len(out) < size:
+      raise ValueError(f"Output buffer is too short: {len(out)} < {size}")
+
+    rarr = np.empty((size,), dtype='u1') if out is None else out
+    with nogil:
+      rbuf = PyArray_DATA(rarr)
+      offset = <hsize_t *>PyArray_DATA(coords)
+      ret = H5Dread_chunk(self.dataset_id, H5P_DEFAULT, offset,
+                          &filters, rbuf)
+    if ret < 0:
+      raise HDF5ExtError("Problems reading chunk from ``%s``"
+                         % self._v_pathname)
+    return rarr
+
+  def _g_write_chunk(self, ndarray coords, ndarray data, uint32_t filters):
+    """Write the raw `data` to the chunk in `coords`.
+
+    The `filters` mask indicates which filters of the pipeline have not been
+    used to create the `data`.
+
+    """
+    cdef herr_t ret
+    cdef hsize_t *offset
+    cdef size_t data_size
+    cdef void *wbuf
+
+    data_size = data.size
+    with nogil:
+      wbuf = PyArray_DATA(data)
+      offset = <hsize_t *>PyArray_DATA(coords)
+      ret = H5Dwrite_chunk(self.dataset_id, H5P_DEFAULT, filters,
+                           offset, data_size, wbuf)
+    if ret < 0:
+      raise HDF5ExtError("Problems writing chunk to ``%s``"
+                         % self._v_pathname)
+
   cdef _get_type_ids(self):
     """Get the disk and native HDF5 types associated with this leaf.
 
@@ -1268,10 +1449,10 @@ cdef void* _array_data(ndarray arr):
             return PyArray_DATA(arr)
     return NULL
 
-def _supports_opt_blosc2_read_write(byteorder, complib, file_mode):
-    if complib:
+def _supports_opt_blosc2_read_write(byteorder, filter_list, file_mode):
+    if len(filter_list) == 1:  # Blosc2 must be the only filter
       opt_write = ((byteorder == sys.byteorder)
-                   and (complib.startswith("blosc2")))
+                   and ((filter_list[0] or "").startswith("blosc2")))
     else:
       opt_write = False
     # For reading, Windows does not support re-opening a file twice
@@ -1378,7 +1559,7 @@ cdef class Array(Leaf):
 
     # Decide whether Blosc2 optimized operations can be used.
     (self.blosc2_support_read, self.blosc2_support_write) = (
-        _supports_opt_blosc2_read_write(self.byteorder, self.filters.complib,
+        _supports_opt_blosc2_read_write(self.byteorder, [self.filters.complib],
                                         self._v_file.mode))
 
     rbuf = NULL   # The data pointer. We don't have data to save initially
@@ -1498,10 +1679,9 @@ cdef class Array(Leaf):
       # Get the chunkshape as a python tuple
       chunkshapes = getshape(self.rank, self.dims_chunk)
       # Decide whether Blosc2 optimized operations can be used.
-      filters = get_filters(self.parent_id, self.name)
+      filters = get_filters(self.parent_id, self.name) or {}
       (self.blosc2_support_read, self.blosc2_support_write) = (
-          _supports_opt_blosc2_read_write(byteorder,
-                                          'blosc2' if 'blosc2' in filters else None,
+          _supports_opt_blosc2_read_write(byteorder, list(filters),
                                           self._v_file.mode))
 
     # object arrays should not be read directly into memory

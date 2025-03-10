@@ -14,10 +14,10 @@ sthe setup script
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/setup.py b/setup.py
-index 48dc6ca..5a03920 100755
+index 259bcd5..bd53bec 100755
 --- a/setup.py
 +++ b/setup.py
-@@ -488,7 +488,7 @@ class BasePackage:
+@@ -521,7 +521,7 @@ class BasePackage:
  
  class PosixPackage(BasePackage):
      _library_prefixes = ["lib"]

@@ -1,3 +1,55 @@
+pytables (3.10.2-2) unstable; urgency=medium
+
+  * Team upload
+  * Make python3-tables-lib Architecture: any again (closes: #1094789)
+  * Add Multi-Arch hint to python-tables-doc
+
+ -- Julian Gilbey <jdg@debian.org>  Fri, 31 Jan 2025 10:39:58 +0000
+
+pytables (3.10.2-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Update d/watch to use pypi instead of guthub archive.
+    In this way also the directories tracked as submodules
+    are available.
+  * Update d/copyright.
+  * debian/patches:
+    - Refresh all patches.
+  * debian/control:
+    - Drop dependencies on numpydoc and typing-extensions.
+  * debian/rules:
+    - Do not install upstream release notes, not included in the
+      upstream tarball.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Wed, 08 Jan 2025 00:32:06 +0000
+
+pytables (3.10.1-2) unstable; urgency=medium
+
+  * Drop support for mips64el (see #1091836).
+  * Update dates in d/copyright.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Thu, 02 Jan 2025 19:03:09 +0000
+
+pytables (3.10.1-1) unstable; urgency=medium
+
+  * New upstream release.
+  * debian/patches:
+    - Refresh all patches.
+    - New 0006-Build-with-numpy-1.x.patch.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sun, 18 Aug 2024 10:04:32 +0000
+
+pytables (3.10.0-1) unstable; urgency=medium
+
+  * New upstream release.
+  * debian/patches:
+    - Refresh all patches.
+  * Standards version bumped to 4.7.0, no changes.
+  * debian/control:
+    - Add dependency on python3-typing-extension.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Wed, 14 Aug 2024 13:54:14 +0000
+
 pytables (3.9.2-2) unstable; urgency=medium
 
   * debian/patches:
