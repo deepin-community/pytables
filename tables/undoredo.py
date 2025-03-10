@@ -16,55 +16,75 @@ Misc variables:
 
 """
 
+from typing import Literal, TYPE_CHECKING
+
 from .path import split_path
 
+if TYPE_CHECKING:
+    from .file import File
 
-__docformat__ = 'reStructuredText'
+__docformat__ = "reStructuredText"
 """The format of documentation strings in this module."""
 
 
-def undo(file_, operation, *args):
-    if operation == 'CREATE':
+def undo(
+    file_: "File",
+    operation: Literal["ADDATTR", "CREATE", "DELATTR", "MOVE", "REMOVE"],
+    *args: str,
+) -> None:
+    """Undo action."""
+    if operation == "CREATE":
         undo_create(file_, args[0])
-    elif operation == 'REMOVE':
+    elif operation == "REMOVE":
         undo_remove(file_, args[0])
-    elif operation == 'MOVE':
+    elif operation == "MOVE":
         undo_move(file_, args[0], args[1])
-    elif operation == 'ADDATTR':
+    elif operation == "ADDATTR":
         undo_add_attr(file_, args[0], args[1])
-    elif operation == 'DELATTR':
+    elif operation == "DELATTR":
         undo_del_attr(file_, args[0], args[1])
     else:
-        raise NotImplementedError("the requested unknown operation %r can "
-                                  "not be undone; please report this to the "
-                                  "authors" % operation)
+        raise NotImplementedError(
+            "the requested unknown operation %r can "
+            "not be undone; please report this to the "
+            "authors" % operation
+        )
 
 
-def redo(file_, operation, *args):
-    if operation == 'CREATE':
+def redo(
+    file_: "File",
+    operation: Literal["ADDATTR", "CREATE", "DELATTR", "MOVE", "REMOVE"],
+    *args: str,
+) -> None:
+    """Re-do action."""
+    if operation == "CREATE":
         redo_create(file_, args[0])
-    elif operation == 'REMOVE':
+    elif operation == "REMOVE":
         redo_remove(file_, args[0])
-    elif operation == 'MOVE':
+    elif operation == "MOVE":
         redo_move(file_, args[0], args[1])
-    elif operation == 'ADDATTR':
+    elif operation == "ADDATTR":
         redo_add_attr(file_, args[0], args[1])
-    elif operation == 'DELATTR':
+    elif operation == "DELATTR":
         redo_del_attr(file_, args[0], args[1])
     else:
-        raise NotImplementedError("the requested unknown operation %r can "
-                                  "not be redone; please report this to the "
-                                  "authors" % operation)
+        raise NotImplementedError(
+            "the requested unknown operation %r can "
+            "not be redone; please report this to the "
+            "authors" % operation
+        )
 
 
-def move_to_shadow(file_, path):
+def move_to_shadow(file_: "File", path: str) -> None:
+    """Move a node to the set of shadowed ones."""
     node = file_._get_node(path)
 
     (shparent, shname) = file_._shadow_name()
     node._g_move(shparent, shname)
 
 
-def move_from_shadow(file_, path):
+def move_from_shadow(file_: "File", path: str) -> None:
+    """Move a node fro the set of shadowe dones back to foreground."""
     (shparent, shname) = file_._shadow_name()
     node = shparent._f_get_child(shname)
 
@@ -73,23 +93,28 @@ def move_from_shadow(file_, path):
     node._g_move(parent, name)
 
 
-def undo_create(file_, path):
+def undo_create(file_: "File", path: str) -> None:
+    """Undo create node."""
     move_to_shadow(file_, path)
 
 
-def redo_create(file_, path):
+def redo_create(file_: "File", path: str) -> None:
+    """Re-do create node."""
     move_from_shadow(file_, path)
 
 
-def undo_remove(file_, path):
+def undo_remove(file_: "File", path: str) -> None:
+    """Undo remove node."""
     move_from_shadow(file_, path)
 
 
-def redo_remove(file_, path):
+def redo_remove(file_: "File", path: str) -> None:
+    """Re-do remove node."""
     move_to_shadow(file_, path)
 
 
-def undo_move(file_, origpath, destpath):
+def undo_move(file_: "File", origpath: str, destpath: str) -> None:
+    """Undo move node."""
     (origpname, origname) = split_path(origpath)
 
     node = file_._get_node(destpath)
@@ -97,7 +122,8 @@ def undo_move(file_, origpath, destpath):
     node._g_move(origparent, origname)
 
 
-def redo_move(file_, origpath, destpath):
+def redo_move(file_: "File", origpath: str, destpath: str) -> None:
+    """Re-do move node."""
     (destpname, destname) = split_path(destpath)
 
     node = file_._get_node(origpath)
@@ -105,7 +131,8 @@ def redo_move(file_, origpath, destpath):
     node._g_move(destparent, destname)
 
 
-def attr_to_shadow(file_, path, name):
+def attr_to_shadow(file_: "File", path: str, name: str) -> None:
+    """Move an attribute to the shadowed attribute set."""
     node = file_._get_node(path)
     attrs = node._v_attrs
     value = getattr(attrs, name)
@@ -121,7 +148,8 @@ def attr_to_shadow(file_, path, name):
     attrs._g__delattr(name)
 
 
-def attr_from_shadow(file_, path, name):
+def attr_from_shadow(file_: "File", path: str, name: str) -> None:
+    """Move an attribute from shadowed attribute set to foreground."""
     (shparent, shname) = file_._shadow_name()
     shattrs = shparent._v_attrs
     value = getattr(shattrs, shname)
@@ -133,17 +161,21 @@ def attr_from_shadow(file_, path, name):
     # shattrs._g__delattr(shname)
 
 
-def undo_add_attr(file_, path, name):
+def undo_add_attr(file_: "File", path: str, name: str) -> None:
+    """Undo add attribute."""
     attr_to_shadow(file_, path, name)
 
 
-def redo_add_attr(file_, path, name):
+def redo_add_attr(file_: "File", path: str, name: str) -> None:
+    """Re-do add attribute."""
     attr_from_shadow(file_, path, name)
 
 
-def undo_del_attr(file_, path, name):
+def undo_del_attr(file_: "File", path: str, name: str) -> None:
+    """Undo delete attribute."""
     attr_from_shadow(file_, path, name)
 
 
-def redo_del_attr(file_, path, name):
+def redo_del_attr(file_: "File", path: str, name: str) -> None:
+    """Re-do delete attribute."""
     attr_to_shadow(file_, path, name)

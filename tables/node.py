@@ -1,22 +1,36 @@
 """PyTables nodes."""
 
+from __future__ import annotations
+
 import warnings
 import functools
+from typing import Any, TYPE_CHECKING
+from collections.abc import Callable
 
-from .registry import class_name_dict, class_id_dict
-from .exceptions import (ClosedNodeError, NodeError, UndoRedoWarning,
-                         PerformanceWarning)
 from .path import join_path, split_path, isvisiblepath
 from .utils import lazyattr
+from .registry import class_name_dict, class_id_dict
 from .undoredo import move_to_shadow
+from .exceptions import (
+    ClosedNodeError,
+    NodeError,
+    UndoRedoWarning,
+    PerformanceWarning,
+)
 from .attributeset import AttributeSet, NotLoggedAttributeSet
 
+# The following imports are just needed for type annotations.
+# However, actually importing them is not possible here as it will
+# create a circular import.
+if TYPE_CHECKING:
+    from .link import SoftLink
+    from .group import Group
 
-__docformat__ = 'reStructuredText'
+__docformat__ = "reStructuredText"
 """The format of documentation strings in this module."""
 
 
-def _closedrepr(oldmethod):
+def _closedrepr(oldmethod: Callable[[], str]) -> Callable[[], str]:
     """Decorate string representation method to handle closed nodes.
 
     If the node is closed, a string like this is returned::
@@ -28,10 +42,12 @@ def _closedrepr(oldmethod):
     """
 
     @functools.wraps(oldmethod)
-    def newmethod(self):
+    def newmethod(self) -> str:
         if not self._v_isopen:
-            return (f'<closed {self.__class__.__module__}.'
-                    f'{self.__class__.__name__} at 0x{id(self):x}>')
+            return (
+                f"<closed {self.__class__.__module__}."
+                f"{self.__class__.__name__} at 0x{id(self):x}>"
+            )
         return oldmethod(self)
 
     return newmethod
@@ -52,15 +68,17 @@ class MetaNode(type):
 
     """
 
-    def __new__(mcs, name, bases, dict_):
-        # Add default behaviour for representing closed nodes.
-        for mname in ['__str__', '__repr__']:
+    def __new__(
+        cls, name: str, bases: tuple, dict_: dict[str, Any]
+    ) -> MetaNode:
+        """Add default behavior for representing closed nodes."""
+        for mname in ["__str__", "__repr__"]:
             if mname in dict_:
                 dict_[mname] = _closedrepr(dict_[mname])
 
-        return type.__new__(mcs, name, bases, dict_)
+        return type.__new__(cls, name, bases, dict_)
 
-    def __init__(cls, name, bases, dict_):
+    def __init__(cls, name: str, bases: tuple, dict_: dict[str, Any]) -> None:
         super().__init__(name, bases, dict_)
 
         # Always register into class name dictionary.
@@ -68,10 +86,10 @@ class MetaNode(type):
 
         # Register into class identifier dictionary only if the class
         # has an identifier and it is different from its parents'.
-        cid = getattr(cls, '_c_classid', None)
+        cid = getattr(cls, "_c_classid", None)
         if cid is not None:
             for base in bases:
-                pcid = getattr(base, '_c_classid', None)
+                pcid = getattr(base, "_c_classid", None)
                 if pcid == cid:
                     break
             else:
@@ -110,7 +128,7 @@ class Node(metaclass=MetaNode):
 
     .. attribute:: _v_depth
 
-        The depth of this node in the tree (an non-negative integer value).
+        The depth of this node in the tree (n non-negative integer value).
 
     .. attribute:: _v_file
 
@@ -137,8 +155,8 @@ class Node(metaclass=MetaNode):
     _AttributeSet = AttributeSet
 
     # `_v_parent` is accessed via its file to avoid upwards references.
-    def _g_getparent(self):
-        """The parent :class:`Group` instance"""
+    def _g_getparent(self) -> Group:
+        """Return the parent :class:`Group` instance."""
         (parentpath, nodename) = split_path(self._v_pathname)
         return self._v_file._get_node(parentpath)
 
@@ -147,27 +165,29 @@ class Node(metaclass=MetaNode):
     # '_v_attrs' is defined as a lazy read-only attribute.
     # This saves 0.7s/3.8s.
     @lazyattr
-    def _v_attrs(self):
-        """The associated `AttributeSet` instance.
+    def _v_attrs(self) -> AttributeSet:
+        """`AttributeSet` instance associated to the `Node`.
 
         See Also
         --------
         tables.attributeset.AttributeSet : container for the HDF5 attributes
 
         """
-
         return self._AttributeSet(self)
 
     # '_v_title' is a direct read-write shorthand for the 'TITLE' attribute
     # with the empty string as a default value.
-    def _g_gettitle(self):
-        """A description of this node. A shorthand for TITLE attribute."""
-        if hasattr(self._v_attrs, 'TITLE'):
+    def _g_gettitle(self) -> str:
+        """Return the description of the node.
+
+        A shorthand for TITLE attribute.
+        """
+        if hasattr(self._v_attrs, "TITLE"):
             return self._v_attrs.TITLE
         else:
-            return ''
+            return ""
 
-    def _g_settitle(self, title):
+    def _g_settitle(self, title: str) -> None:
         self._v_attrs.TITLE = title
 
     _v_title = property(_g_gettitle, _g_settitle)
@@ -175,16 +195,18 @@ class Node(metaclass=MetaNode):
     # This may be looked up by ``__del__`` when ``__init__`` doesn't get
     # to be called.  See ticket #144 for more info.
     _v_isopen = False
-    """Whehter this node is open or not."""
+    """Whether this node is open or not."""
 
     # The ``_log`` argument is only meant to be used by ``_g_copy_as_child()``
     # to avoid logging the creation of children nodes of a copied sub-tree.
-    def __init__(self, parentnode, name, _log=True):
+    def __init__(
+        self, parentnode: Group | SoftLink, name: str, _log: bool = True
+    ) -> None:
         # Remember to assign these values in the root group constructor
         # as it does not use this method implementation!
 
         # if the parent node is a softlink, dereference it
-        if isinstance(parentnode, class_name_dict['SoftLink']):
+        if isinstance(parentnode, class_name_dict["SoftLink"]):
             parentnode = parentnode.dereference()
 
         self._v_file = None
@@ -203,7 +225,7 @@ class Node(metaclass=MetaNode):
         """The depth of this node in the tree (an non-negative integer value).
         """
 
-        self._v_maxtreedepth = parentnode._v_file.params['MAX_TREE_DEPTH']
+        self._v_maxtreedepth = parentnode._v_file.params["MAX_TREE_DEPTH"]
         """Maximum tree depth before warning the user.
 
         .. versionchanged:: 3.0
@@ -264,10 +286,10 @@ class Node(metaclass=MetaNode):
             self._f_close()
             raise
 
-    def _g_log_create(self):
-        self._v_file._log('CREATE', self._v_pathname)
+    def _g_log_create(self) -> None:
+        self._v_file._log("CREATE", self._v_pathname)
 
-    def __del__(self):
+    def __del__(self) -> None:
         # Closed `Node` instances can not be killed and revived.
         # Instead, accessing a closed and deleted (from memory, not
         # disk) one yields a *new*, open `Node` instance.  This is
@@ -302,30 +324,29 @@ class Node(metaclass=MetaNode):
                 self._v__deleting = True
                 self._f_close()
 
-    def _g_pre_kill_hook(self):
+    def _g_pre_kill_hook(self) -> None:
         """Code to be called before killing the node."""
         pass
 
-    def _g_create(self):
+    def _g_create(self) -> int:
         """Create a new HDF5 node and return its object identifier."""
         raise NotImplementedError
 
-    def _g_open(self):
+    def _g_open(self) -> int:
         """Open an existing HDF5 node and return its object identifier."""
         raise NotImplementedError
 
-    def _g_check_open(self):
+    def _g_check_open(self) -> None:
         """Check that the node is open.
 
         If the node is closed, a `ClosedNodeError` is raised.
 
         """
-
         if not self._v_isopen:
             raise ClosedNodeError("the node object is closed")
         assert self._v_file.isopen, "found an open node in a closed file"
 
-    def _g_set_location(self, parentnode, name):
+    def _g_set_location(self, parentnode: Group, name: str) -> None:
         """Set location-dependent attributes.
 
         Sets the location-dependent attributes of this node to reflect
@@ -337,7 +358,6 @@ class Node(metaclass=MetaNode):
         `PerformanceWarning` is issued.
 
         """
-
         file_ = parentnode._v_file
         parentdepth = parentnode._v_depth
 
@@ -351,7 +371,7 @@ class Node(metaclass=MetaNode):
             if root_uep == "/":
                 self._v_pathname = name
             else:
-                self._v_pathname = name[len(root_uep):]
+                self._v_pathname = name[len(root_uep) :]
             _, self._v_name = split_path(name)
             self._v_depth = name.count("/") - root_uep.count("/") + 1
         else:
@@ -362,16 +382,18 @@ class Node(metaclass=MetaNode):
 
         # Check if the node is too deep in the tree.
         if parentdepth >= self._v_maxtreedepth:
-            warnings.warn("""\
+            warnings.warn(
+                """\
 node ``%s`` is exceeding the recommended maximum depth (%d);\
 be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
-                          % (self._v_pathname, self._v_maxtreedepth),
-                          PerformanceWarning)
+                % (self._v_pathname, self._v_maxtreedepth),
+                PerformanceWarning,
+            )
 
-        if self._v_pathname != '/':
+        if self._v_pathname != "/":
             file_._node_manager.cache_node(self, self._v_pathname)
 
-    def _g_update_location(self, newparentpath):
+    def _g_update_location(self, newparentpath: str) -> None:
         """Update location-dependent attributes.
 
         Updates location data when an ancestor node has changed its
@@ -384,20 +406,22 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         unique.
 
         """
-
         oldpath = self._v_pathname
         newpath = join_path(newparentpath, self._v_name)
-        newdepth = newpath.count('/')
+        newdepth = newpath.count("/")
 
         self._v_pathname = newpath
         self._v_depth = newdepth
 
         # Check if the node is too deep in the tree.
         if newdepth > self._v_maxtreedepth:
-            warnings.warn("""\
+            warnings.warn(
+                """\
 moved descendent node is exceeding the recommended maximum depth (%d);\
 be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
-                          % (self._v_maxtreedepth,), PerformanceWarning)
+                % (self._v_maxtreedepth,),
+                PerformanceWarning,
+            )
 
         node_manager = self._v_file._node_manager
         node_manager.rename_node(oldpath, newpath)
@@ -405,19 +429,18 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         # Tell dependent objects about the new location of this node.
         self._g_update_dependent()
 
-    def _g_del_location(self):
+    def _g_del_location(self) -> None:
         """Clear location-dependent attributes.
 
         This also triggers the removal of file references to this node.
 
         """
-
         node_manager = self._v_file._node_manager
         pathname = self._v_pathname
 
         if not self._v__deleting:
             node_manager.drop_from_cache(pathname)
-            # Note: node_manager.drop_node do not removes the node form the
+            # Note: node_manager.drop_node does not remove the node from the
             # registry if it is still open
             node_manager.registry.pop(pathname, None)
 
@@ -427,22 +450,21 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         self._v_name = None
         self._v_depth = None
 
-    def _g_post_init_hook(self):
+    def _g_post_init_hook(self) -> None:
         """Code to be run after node creation and before creation logging."""
         pass
 
-    def _g_update_dependent(self):
+    def _g_update_dependent(self) -> None:
         """Update dependent objects after a location change.
 
         All dependent objects (but not nodes!) referencing this node
         must be updated here.
 
         """
-
-        if '_v_attrs' in self.__dict__:
+        if "_v_attrs" in self.__dict__:
             self._v_attrs._g_update_node_location(self)
 
-    def _f_close(self):
+    def _f_close(self) -> None:
         """Close this node in the tree.
 
         This releases all resources held by the node, so it should not
@@ -453,7 +475,6 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         the integrated LRU cache.
 
         """
-
         # After calling ``_f_close()``, two conditions are met:
         #
         #   1. The node object is detached from the tree.
@@ -465,23 +486,23 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         if not self._v_isopen:
             return  # the node is already closed
 
-        myDict = self.__dict__
+        dict_ = self.__dict__
 
         # Close the associated `AttributeSet`
         # only if it has already been placed in the object's dictionary.
-        if '_v_attrs' in myDict:
+        if "_v_attrs" in dict_:
             self._v_attrs._g_close()
 
         # Detach the node from the tree if necessary.
         self._g_del_location()
 
         # Finally, clear all remaining attributes from the object.
-        myDict.clear()
+        dict_.clear()
 
         # Just add a final flag to signal that the node is closed:
         self._v_isopen = False
 
-    def _g_remove(self, recursive, force):
+    def _g_remove(self, recursive: bool, force: bool) -> None:
         """Remove this node from the hierarchy.
 
         If the node has children, recursive removal must be stated by
@@ -494,7 +515,6 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         It does not log the change.
 
         """
-
         # Remove the node from the PyTables hierarchy.
         parent = self._v_parent
         parent._g_unrefnode(self._v_name)
@@ -504,7 +524,7 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         # Remove the node from the HDF5 hierarchy.
         self._g_delete(parent)
 
-    def _f_remove(self, recursive=False, force=False):
+    def _f_remove(self, recursive: bool = False, force: bool = False) -> None:
         """Remove this node from the hierarchy.
 
         If the node has children, recursive removal must be stated by giving
@@ -514,7 +534,6 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         to delete it, you can do this by setting the force flag to true.
 
         """
-
         self._g_check_open()
         file_ = self._v_file
         file_._check_writable()
@@ -524,14 +543,14 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         else:
             self._g_remove(recursive, force)
 
-    def _g_remove_and_log(self, recursive, force):
+    def _g_remove_and_log(self, recursive: bool, force: bool) -> None:
         file_ = self._v_file
         oldpathname = self._v_pathname
         # Log *before* moving to use the right shadow name.
-        file_._log('REMOVE', oldpathname)
+        file_._log("REMOVE", oldpathname)
         move_to_shadow(file_, oldpathname)
 
-    def _g_move(self, newparent, newname):
+    def _g_move(self, newparent: Group, newname: str) -> None:
         """Move this node in the hierarchy.
 
         Moves the node into the given `newparent`, with the given
@@ -540,7 +559,6 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         It does not log the change.
 
         """
-
         oldparent = self._v_parent
         oldname = self._v_name
         oldpathname = self._v_pathname  # to move the HDF5 node
@@ -560,14 +578,19 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         self._g_new(newparent, self._v_name, init=False)
         #   Move the node.
         # self._v_parent._g_move_node(oldpathname, self._v_pathname)
-        self._v_parent._g_move_node(oldparent._v_objectid, oldname,
-                                    newparent._v_objectid, newname,
-                                    oldpathname, self._v_pathname)
+        self._v_parent._g_move_node(
+            oldparent._v_objectid,
+            oldname,
+            newparent._v_objectid,
+            newname,
+            oldpathname,
+            self._v_pathname,
+        )
 
         # Tell dependent objects about the new location of this node.
         self._g_update_dependent()
 
-    def _f_rename(self, newname, overwrite=False):
+    def _f_rename(self, newname: str, overwrite: bool = False) -> None:
         """Rename this node in place.
 
         Changes the name of a node to *newname* (a string).  If a node with the
@@ -575,20 +598,25 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         it before renaming.
 
         """
-
         self._f_move(newname=newname, overwrite=overwrite)
 
-    def _f_move(self, newparent=None, newname=None,
-                overwrite=False, createparents=False):
+    def _f_move(
+        self,
+        newparent: Group | str | None = None,
+        newname: str | None = None,
+        overwrite: bool = False,
+        createparents: bool = False,
+    ) -> None:
         """Move or rename this node.
 
         Moves a node into a new parent group, or changes the name of the
-        node. newparent can be a Group object (see :ref:`GroupClassDescr`) or a
-        pathname in string form. If it is not specified or None, the current
-        parent group is chosen as the new parent.  newname must be a string
-        with a new name. If it is not specified or None, the current name is
-        chosen as the new name. If createparents is true, the needed groups for
-        the given new parent group path to exist will be created.
+        node. `newparent` can be a Group object (see :ref:`GroupClassDescr`)
+        or a pathname in string form. If it is not specified or `None`, the
+        current parent group is chosen as the new parent.  newname must be
+        a string with a new name.
+        If it is not specified or None, the current name is chosen as the
+        new name. If `createparents` is true, the needed groups for the
+        given new parent group path to exist will be created.
 
         Moving a node across databases is not allowed, nor it is moving a node
         *into* itself. These result in a NodeError. However, moving a node
@@ -602,7 +630,6 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         second argument is equivalent to renaming the node in place.
 
         """
-
         self._g_check_open()
         file_ = self._v_file
         oldparent = self._v_parent
@@ -610,29 +637,34 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
 
         # Set default arguments.
         if newparent is None and newname is None:
-            raise NodeError("you should specify at least "
-                            "a ``newparent`` or a ``newname`` parameter")
+            raise NodeError(
+                "you should specify at least "
+                "a ``newparent`` or a ``newname`` parameter"
+            )
         if newparent is None:
             newparent = oldparent
         if newname is None:
             newname = oldname
 
         # Get destination location.
-        if hasattr(newparent, '_v_file'):  # from node
+        if hasattr(newparent, "_v_file"):  # from node
             newfile = newparent._v_file
             newpath = newparent._v_pathname
-        elif hasattr(newparent, 'startswith'):  # from path
+        elif hasattr(newparent, "startswith"):  # from path
             newfile = file_
             newpath = newparent
         else:
-            raise TypeError("new parent is not a node nor a path: %r"
-                            % (newparent,))
+            raise TypeError(
+                f"new parent is not a node nor a path: {newparent!r}"
+            )
 
         # Validity checks on arguments.
         # Is it in the same file?
         if newfile is not file_:
-            raise NodeError("nodes can not be moved across databases; "
-                            "please make a copy of the node")
+            raise NodeError(
+                "nodes can not be moved across databases; "
+                "please make a copy of the node"
+            )
 
         # The movement always fails if the hosting file can not be modified.
         file_._check_writable()
@@ -666,15 +698,22 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         if file_.is_undo_enabled():
             self._g_log_move(oldpathname)
 
-    def _g_log_move(self, oldpathname):
-        self._v_file._log('MOVE', oldpathname, self._v_pathname)
+    def _g_log_move(self, oldpathname: str) -> None:
+        self._v_file._log("MOVE", oldpathname, self._v_pathname)
 
-    def _g_copy(self, newparent, newname, recursive, _log=True, **kwargs):
+    def _g_copy(
+        self,
+        newparent: Group,
+        newname: str,
+        recursive: bool,
+        _log: bool = True,
+        **kwargs,
+    ) -> Node:
         """Copy this node and return the new one.
 
         Creates and returns a copy of the node in the given `newparent`,
         with the given `newname`.  If `recursive` copy is stated, all
-        descendents are copied as well.  Additional keyword argumens may
+        descendents are copied as well.  Additional keyword arguments may
         affect the way that the copy is made.  Unknown arguments must be
         ignored.  On recursive copies, all keyword arguments must be
         passed on to the children invocation of this method.
@@ -684,10 +723,9 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         optimising sub-tree copies.
 
         """
-
         raise NotImplementedError
 
-    def _g_copy_as_child(self, newparent, **kwargs):
+    def _g_copy_as_child(self, newparent: Group, **kwargs) -> Node:
         """Copy this node as a child of another group.
 
         Copies just this node into `newparent`, not recursing children
@@ -695,13 +733,19 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         be used when copying whole sub-trees.
 
         """
+        return self._g_copy(
+            newparent, self._v_name, recursive=False, _log=False, **kwargs
+        )
 
-        return self._g_copy(newparent, self._v_name,
-                            recursive=False, _log=False, **kwargs)
-
-    def _f_copy(self, newparent=None, newname=None,
-                overwrite=False, recursive=False, createparents=False,
-                **kwargs):
+    def _f_copy(
+        self,
+        newparent: Group | str | None = None,
+        newname: str | None = None,
+        overwrite: bool = False,
+        recursive: bool = False,
+        createparents: bool = False,
+        **kwargs,
+    ) -> Node:
         """Copy this node and return the new node.
 
         Creates and returns a copy of the node, maybe in a different place in
@@ -732,7 +776,6 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         is equivalent to making a copy of the node in the same group.
 
         """
-
         self._g_check_open()
         srcfile = self._v_file
         srcparent = self._v_parent
@@ -743,23 +786,26 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
 
         # Set default arguments.
         if dstparent is None and dstname is None:
-            raise NodeError("you should specify at least "
-                            "a ``newparent`` or a ``newname`` parameter")
+            raise NodeError(
+                "you should specify at least "
+                "a ``newparent`` or a ``newname`` parameter"
+            )
         if dstparent is None:
             dstparent = srcparent
         if dstname is None:
             dstname = srcname
 
         # Get destination location.
-        if hasattr(dstparent, '_v_file'):  # from node
+        if hasattr(dstparent, "_v_file"):  # from node
             dstfile = dstparent._v_file
             dstpath = dstparent._v_pathname
-        elif hasattr(dstparent, 'startswith'):  # from path
+        elif hasattr(dstparent, "startswith"):  # from path
             dstfile = srcfile
             dstpath = dstparent
         else:
-            raise TypeError("new parent is not a node nor a path: %r"
-                            % (dstparent,))
+            raise TypeError(
+                f"new parent is not a node nor a path: {dstparent!r}"
+            )
 
         # Validity checks on arguments.
         if dstfile is srcfile:
@@ -768,7 +814,8 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
             if dstpath == srcpath and dstname == srcname:
                 raise NodeError(
                     "source and destination nodes are the same node: ``%s``"
-                    % self._v_pathname)
+                    % self._v_pathname
+                )
 
             # Recursively copying into itself?
             if recursive:
@@ -784,9 +831,11 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
 
         # Copying to another file with undo enabled?
         if dstfile is not srcfile and srcfile.is_undo_enabled():
-            warnings.warn("copying across databases can not be undone "
-                          "nor redone from this database",
-                          UndoRedoWarning)
+            warnings.warn(
+                "copying across databases can not be undone "
+                "nor redone from this database",
+                UndoRedoWarning,
+            )
 
         # Copying over an existing node?
         self._g_maybe_remove(dstparent, dstname, overwrite)
@@ -795,98 +844,103 @@ be ready to see PyTables asking for *lots* of memory and possibly slow I/O"""
         # The constructor of the new node takes care of logging.
         return self._g_copy(dstparent, dstname, recursive, **kwargs)
 
-    def _f_isvisible(self):
-        """Is this node visible?"""
-
+    def _f_isvisible(self) -> bool:
+        """Return True if the node is visible."""
         self._g_check_open()
         return isvisiblepath(self._v_pathname)
 
-    def _g_check_group(self, node):
+    def _g_check_group(self, node: Group) -> None:
         # Node must be defined in order to define a Group.
         # However, we need to know Group here.
         # Using class_name_dict avoids a circular import.
-        if not isinstance(node, class_name_dict['Node']):
-            raise TypeError("new parent is not a registered node: %s"
-                            % node._v_pathname)
-        if not isinstance(node, class_name_dict['Group']):
-            raise TypeError("new parent node ``%s`` is not a group"
-                            % node._v_pathname)
+        if not isinstance(node, class_name_dict["Node"]):
+            raise TypeError(
+                "new parent is not a registered node: %s" % node._v_pathname
+            )
+        if not isinstance(node, class_name_dict["Group"]):
+            raise TypeError(
+                "new parent node ``%s`` is not a group" % node._v_pathname
+            )
 
-    def _g_check_not_contains(self, pathname):
+    def _g_check_not_contains(self, pathname: str) -> None:
         # The not-a-TARDIS test. ;)
         mypathname = self._v_pathname
-        if (mypathname == '/'  # all nodes fall below the root group
-           or pathname == mypathname
-           or pathname.startswith(mypathname + '/')):
-            raise NodeError("can not move or recursively copy node ``%s`` "
-                            "into itself" % mypathname)
+        if (
+            mypathname == "/"  # all nodes fall below the root group
+            or pathname == mypathname
+            or pathname.startswith(mypathname + "/")
+        ):
+            raise NodeError(
+                "can not move or recursively copy node ``%s`` "
+                "into itself" % mypathname
+            )
 
-    def _g_maybe_remove(self, parent, name, overwrite):
+    def _g_maybe_remove(
+        self, parent: Group, name: str, overwrite: bool
+    ) -> None:
         if name in parent:
             if not overwrite:
                 raise NodeError(
                     f"destination group ``{parent._v_pathname}`` already "
                     f"has a node named ``{name}``; you may want to use the "
-                    f"``overwrite`` argument")
+                    f"``overwrite`` argument"
+                )
             parent._f_get_child(name)._f_remove(True)
 
-    def _g_check_name(self, name):
+    def _g_check_name(self, name: str) -> None:
         """Check validity of name for this particular kind of node.
 
         This is invoked once the standard HDF5 and natural naming checks
         have successfully passed.
 
         """
-
-        if name.startswith('_i_'):
+        if name.startswith("_i_"):
             # This is reserved for table index groups.
             raise ValueError(
-                "node name starts with reserved prefix ``_i_``: %s" % name)
+                "node name starts with reserved prefix ``_i_``: %s" % name
+            )
 
-    def _f_getattr(self, name):
+    def _f_getattr(self, name: str) -> Any:
         """Get a PyTables attribute from this node.
 
         If the named attribute does not exist, an AttributeError is
         raised.
 
         """
-
         return getattr(self._v_attrs, name)
 
-    def _f_setattr(self, name, value):
+    def _f_setattr(self, name: str, value: Any) -> None:
         """Set a PyTables attribute for this node.
 
         If the node already has a large number of attributes, a
         PerformanceWarning is issued.
 
         """
-
         setattr(self._v_attrs, name, value)
 
-    def _f_delattr(self, name):
+    def _f_delattr(self, name: str) -> None:
         """Delete a PyTables attribute from this node.
 
         If the named attribute does not exist, an AttributeError is
         raised.
 
         """
-
         delattr(self._v_attrs, name)
-
-    # </attribute handling>
 
 
 class NotLoggedMixin:
+    """Mixin class suppressing logging in a node tree."""
+
     # Include this class in your inheritance tree
     # to avoid changes to instances of your class from being logged.
 
     _AttributeSet = NotLoggedAttributeSet
 
-    def _g_log_create(self):
+    def _g_log_create(self) -> None:
         pass
 
-    def _g_log_move(self, oldpathname):
+    def _g_log_move(self, oldpathname: str) -> None:
         pass
 
-    def _g_remove_and_log(self, recursive, force):
+    def _g_remove_and_log(self, recursive: bool, force: bool) -> None:
         self._g_remove(recursive, force)

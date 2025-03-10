@@ -1,11 +1,14 @@
 """Declare exceptions and warnings that are specific to PyTables."""
 
+from __future__ import annotations
+
 import os
 import warnings
 import traceback
-
+from collections.abc import Callable
 
 __all__ = [
+    "ChunkError",
     "ClosedFileError",
     "ClosedNodeError",
     "DataTypeWarning",
@@ -16,8 +19,11 @@ __all__ = [
     "FlavorWarning",
     "HDF5ExtError",
     "NaturalNameWarning",
+    "NoSuchChunkError",
     "NoSuchNodeError",
     "NodeError",
+    "NotChunkedError",
+    "NotChunkAlignedError",
     "OldIndexWarning",
     "PerformanceWarning",
     "UnclosedFileWarning",
@@ -26,7 +32,7 @@ __all__ = [
 ]
 
 
-__docformat__ = 'reStructuredText'
+__docformat__ = "reStructuredText"
 """The format of documentation strings in this module."""
 
 
@@ -67,8 +73,10 @@ class HDF5ExtError(RuntimeError):
 
     # NOTE: in order to avoid circular dependencies between modules the
     #       _dump_h5_backtrace method is set at initialization time in
-    #       the utilsExtenion.
-    _dump_h5_backtrace = None
+    #       the utilsextension.pyx.
+    _dump_h5_backtrace: (
+        Callable[[], list[tuple[str, int, str, str]]] | None
+    ) = None
 
     DEFAULT_H5_BACKTRACE_POLICY = "VERBOSE"
     """Default policy for HDF5 backtrace handling
@@ -94,7 +102,8 @@ class HDF5ExtError(RuntimeError):
     """
 
     @classmethod
-    def set_policy_from_env(cls):
+    def set_policy_from_env(cls) -> str:
+        """Set the policy from environment variables."""
         envmap = {
             "IGNORE": False,
             "FALSE": False,
@@ -108,20 +117,22 @@ class HDF5ExtError(RuntimeError):
         try:
             newvalue = envmap[envvalue.upper()]
         except KeyError:
-            warnings.warn("Invalid value for the environment variable "
-                          "'PT_DEFAULT_H5_BACKTRACE_POLICY'.  The default "
-                          "policy for HDF5 back trace management in PyTables "
-                          "will be: '%s'" % oldvalue)
+            warnings.warn(
+                "Invalid value for the environment variable "
+                "'PT_DEFAULT_H5_BACKTRACE_POLICY'.  The default "
+                "policy for HDF5 back trace management in PyTables "
+                "will be: '%s'" % oldvalue
+            )
         else:
             cls.DEFAULT_H5_BACKTRACE_POLICY = newvalue
 
         return oldvalue
 
-    def __init__(self, *args, **kargs):
+    def __init__(self, *args, **kargs) -> None:
 
         super().__init__(*args)
 
-        self._h5bt_policy = kargs.get('h5bt', self.DEFAULT_H5_BACKTRACE_POLICY)
+        self._h5bt_policy = kargs.get("h5bt", self.DEFAULT_H5_BACKTRACE_POLICY)
 
         if self._h5bt_policy and self._dump_h5_backtrace is not None:
             self.h5backtrace = self._dump_h5_backtrace()
@@ -151,8 +162,8 @@ class HDF5ExtError(RuntimeError):
         else:
             self.h5backtrace = None
 
-    def __str__(self):
-        """Returns a sting representation of the exception.
+    def __str__(self) -> str:
+        """Return a sting representation of the exception.
 
         The actual result depends on policy set in the initializer
         :meth:`HDF5ExtError.__init__`.
@@ -160,15 +171,16 @@ class HDF5ExtError(RuntimeError):
         .. versionadded:: 2.4
 
         """
-
-        verbose = bool(self._h5bt_policy in ('VERBOSE', 'verbose'))
+        verbose = bool(self._h5bt_policy in ("VERBOSE", "verbose"))
 
         if verbose and self.h5backtrace:
-            bt = "\n".join([
-                "HDF5 error back trace\n",
-                self.format_h5_backtrace(),
-                "End of HDF5 error back trace"
-            ])
+            bt = "\n".join(
+                [
+                    "HDF5 error back trace\n",
+                    self.format_h5_backtrace(),
+                    "End of HDF5 error back trace",
+                ]
+            )
 
             if len(self.args) == 1 and isinstance(self.args[0], str):
                 msg = super().__str__()
@@ -182,9 +194,14 @@ class HDF5ExtError(RuntimeError):
 
         return msg
 
-    def format_h5_backtrace(self, backtrace=None):
-        """Convert the HDF5 trace back represented as a list of tuples.
-        (see :attr:`HDF5ExtError.h5backtrace`) into a string.
+    def format_h5_backtrace(
+        self, backtrace: list[tuple[str, int, str, str]] | None = None
+    ) -> str:
+        """Convert the HDF5 trace back into a string.
+
+        The HDF5 trace back is represented as a list of tuples.
+
+        See :attr:`HDF5ExtError.h5backtrace`.
 
         .. versionadded:: 2.4
 
@@ -193,9 +210,9 @@ class HDF5ExtError(RuntimeError):
             backtrace = self.h5backtrace
 
         if backtrace is None:
-            return 'No HDF5 back trace available'
+            return "No HDF5 back trace available"
         else:
-            return ''.join(traceback.format_list(backtrace))
+            return "".join(traceback.format_list(backtrace))
 
 
 # Initialize the policy for HDF5 back trace handling
@@ -204,6 +221,7 @@ HDF5ExtError.set_policy_from_env()
 
 # The following exceptions are concretions of the ``ValueError`` exceptions
 # raised by ``file`` objects on certain operations.
+
 
 class ClosedNodeError(ValueError):
     """The operation can not be completed because the node is closed.
@@ -227,7 +245,9 @@ class ClosedFileError(ValueError):
 
 
 class FileModeError(ValueError):
-    """The operation can not be carried out because the mode in which the
+    """FIle mode error.
+
+    The operation can not be carried out because the mode in which the
     hosting file is opened is not adequate.
 
     For instance, removing an existing leaf from a read-only file is not
@@ -248,9 +268,9 @@ class NodeError(AttributeError, LookupError):
     with children, and other similarly invalid operations.
 
     A node in a PyTables database cannot be simply overwritten by
-    replacing it.  Instead, the old node must be removed explicitely
+    replacing it.  Instead, the old node must be removed explicitly
     before another one can take its place.  This is done to protect
-    interactive users from inadvertedly deleting whole trees of data by
+    interactive users from inadvertently deleting whole trees of data by
     a single erroneous command.
 
     """
@@ -359,7 +379,7 @@ class OldIndexWarning(Warning):
 
     This warning is issued when an index in an unsupported format is
     found.  The index will be marked as invalid and will behave as if
-    doesn't exist.
+    it doesn't exist.
 
     """
 
@@ -384,13 +404,64 @@ class ExperimentalFeatureWarning(Warning):
     experimental and that users have to use with care.
 
     """
+
     pass
 
 
 class UnclosedFileWarning(Warning):
-    """Warning raised when there are still open files at program exit
+    """Warning raised when there are still open files at program exit.
 
-    Pytables will close remaining open files at exit, but raise 
-    this warning.
+    PyTables will close remaining open files at exit, but raise this warning.
     """
+
+    pass
+
+
+class ChunkError(Exception):
+    """An operation related to direct chunk access failed.
+
+    This exception may be related with the properties of the dataset or the
+    chunk being accessed, or with how the chunk is being accessed.  It is a
+    base for more specific exceptions.
+
+    """
+
+    pass
+
+
+class NotChunkedError(ChunkError):
+    """A direct chunking operation was attempted on a non-chunked dataset.
+
+    For instance, chunk information was requested for a plain ``Array``
+    instance.
+
+    """
+
+    pass
+
+
+class NotChunkAlignedError(ChunkError):
+    """Coordinate not aligned to the chunks.
+
+    A direct chunk read/write operation was given coordinates that do not
+    match the chunk's start.
+
+    These operations require coordinates that are integer multiples of the
+    dataset's chunksize.
+
+    """
+
+    pass
+
+
+class NoSuchChunkError(ChunkError):
+    """The chunk with the given coordinates does not exist in storage.
+
+    The coordinates are within the dataset's shape, though.
+
+    This is only an error when the chunk is to be read.  Such a missing chunk
+    can be written, in which case it is created in storage.
+
+    """
+
     pass

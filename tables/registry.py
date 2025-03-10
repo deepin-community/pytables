@@ -14,15 +14,17 @@ Misc variables:
 
 """
 
+from __future__ import annotations
 
 # Important: no modules from PyTables should be imported here
 # (but standard modules are OK), since the main reason for this module
 # is avoiding circular imports!
 
-__docformat__ = 'reStructuredText'
+__docformat__ = "reStructuredText"
+
 """The format of documentation strings in this module."""
 
-class_name_dict = {}
+class_name_dict: dict[str, type] = {}
 """Node class name to class object mapping.
 
 This dictionary maps class names (e.g. ``'Group'``) to actual class
@@ -35,7 +37,7 @@ can be replaced when the module that defines them is reloaded.
 
 """
 
-class_id_dict = {}
+class_id_dict: dict[str, type] = {}
 """Class identifier to class object mapping.
 
 This dictionary maps class identifiers (e.g. ``'GROUP'``) to actual
@@ -49,12 +51,8 @@ module that defines them is reloaded.
 
 """
 
-# Deprecated API
-classNameDict = class_name_dict
-classIdDict = class_id_dict
 
-
-def get_class_by_name(classname):
+def get_class_by_name(classname: str | None) -> type:
     """Get the node class matching the `classname`.
 
     If the name is not registered, a ``TypeError`` is raised.  The empty
@@ -63,15 +61,15 @@ def get_class_by_name(classname):
     .. versionadded:: 3.0
 
     """
-
     # The empty string is accepted for compatibility
     # with old default arguments.
-    if classname is None or classname == '':
-        classname = 'Node'
+    if classname is None or classname == "":
+        classname = "Node"
 
     # Get the class object corresponding to `classname`.
     if classname not in class_name_dict:
-        raise TypeError("there is no registered node class named ``%s``"
-                        % (classname,))
+        raise TypeError(
+            f"there is no registered node class named ``{classname}``"
+        )
 
     return class_name_dict[classname]

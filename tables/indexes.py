@@ -1,12 +1,19 @@
 """Here is defined the IndexArray class."""
 
-from bisect import bisect_left, bisect_right
+from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
+from typing import TYPE_CHECKING
+
+from . import indexesextension
 from .node import NotLoggedMixin
 from .carray import CArray
 from .earray import EArray
-from . import indexesextension
 
+if TYPE_CHECKING:
+    from .atom import Atom
+    from .group import Group
+    from .filters import Filters
 
 # Declarations for inheriting
 
@@ -15,15 +22,14 @@ class CacheArray(indexesextension.CacheArray, NotLoggedMixin, EArray):
     """Container for keeping index caches of 1st and 2nd level."""
 
     # Class identifier.
-    _c_classid = 'CACHEARRAY'
+    _c_classid = "CACHEARRAY"
 
 
 class LastRowArray(indexesextension.LastRowArray, NotLoggedMixin, CArray):
-    """Container for keeping sorted and indices values of last row of an
-    index."""
+    """Container for keeping sorted indices values of last row of an index."""
 
     # Class identifier.
-    _c_classid = 'LASTROWARRAY'
+    _c_classid = "LASTROWARRAY"
 
 
 class IndexArray(indexesextension.IndexArray, NotLoggedMixin, EArray):
@@ -55,23 +61,28 @@ class IndexArray(indexesextension.IndexArray, NotLoggedMixin, EArray):
     """
 
     # Class identifier.
-    _c_classid = 'INDEXARRAY'
+    _c_classid = "INDEXARRAY"
 
     @property
-    def chunksize(self):
-        """The chunksize for this object."""
+    def chunksize(self) -> int:
+        """Size of the chunk for the object."""
         return self.chunkshape[1]
 
     @property
-    def slicesize(self):
-        """The slicesize for this object."""
+    def slicesize(self) -> int:
+        """Size of the slice for the object."""
         return self.shape[1]
 
-    def __init__(self, parentnode, name,
-                 atom=None, title="",
-                 filters=None, byteorder=None):
+    def __init__(
+        self,
+        parentnode: Group,
+        name: str,
+        atom: Atom | None = None,
+        title: str = "",
+        filters: Filters | None = None,
+        byteorder: str | None = None,
+    ) -> None:
         """Create an IndexArray instance."""
-
         self._v_pathname = parentnode._g_join(name)
         if atom is not None:
             # The shape and chunkshape needs to be fixed here
@@ -88,14 +99,23 @@ class IndexArray(indexesextension.IndexArray, NotLoggedMixin, EArray):
             chunkshape = None
 
         super().__init__(
-            parentnode, name, atom, shape, title, filters,
-            chunkshape=chunkshape, byteorder=byteorder)
+            parentnode,
+            name,
+            atom,
+            shape,
+            title,
+            filters,
+            chunkshape=chunkshape,
+            byteorder=byteorder,
+        )
 
     # This version of searchBin uses both ranges (1st level) and
     # bounds (2nd level) caches. It uses a cache for boundary rows,
     # but not for 'sorted' rows (this is only supported for the
     # 'optimized' types).
-    def _search_bin(self, nrow, item):
+    def _search_bin(
+        self, nrow: int, item: tuple[float | int, float | int]
+    ) -> tuple[int, int]:
         item1, item2 = item
         result1 = -1
         result2 = -1
@@ -138,8 +158,9 @@ class IndexArray(indexesextension.IndexArray, NotLoggedMixin, EArray):
         if result1 < 0:
             # Search the appropriate chunk in bounds cache
             nchunk = bisect_left(bounds, item1)
-            chunk = self._read_sorted_slice(nrow, chunksize * nchunk,
-                                            chunksize * (nchunk + 1))
+            chunk = self._read_sorted_slice(
+                nrow, chunksize * nchunk, chunksize * (nchunk + 1)
+            )
             result1 = indexesextension._bisect_left(chunk, item1, chunksize)
             result1 += chunksize * nchunk
         # Lookup in the middle of slice for item2
@@ -147,19 +168,19 @@ class IndexArray(indexesextension.IndexArray, NotLoggedMixin, EArray):
             # Search the appropriate chunk in bounds cache
             nchunk2 = bisect_right(bounds, item2)
             if nchunk2 != nchunk:
-                chunk = self._read_sorted_slice(nrow, chunksize * nchunk2,
-                                                chunksize * (nchunk2 + 1))
+                chunk = self._read_sorted_slice(
+                    nrow, chunksize * nchunk2, chunksize * (nchunk2 + 1)
+                )
             result2 = indexesextension._bisect_right(chunk, item2, chunksize)
             result2 += chunksize * nchunk2
         return (result1, result2)
 
-    def __str__(self):
-        """A compact representation of this class"""
+    def __str__(self) -> str:
+        """Compact representation of the IndexArray object."""
         return f"IndexArray(path={self._v_pathname})"
 
-    def __repr__(self):
-        """A verbose representation of this class."""
-
+    def __repr__(self) -> str:
+        """Retunr the string representation of the IndexArray object."""
         return f"""{self}
   atom = {self.atom!r}
   shape = {self.shape}

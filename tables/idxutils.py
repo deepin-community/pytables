@@ -1,7 +1,14 @@
 """Utilities to be used mainly by the Index class."""
 
+from __future__ import annotations
+
 import math
+from typing import Literal, TYPE_CHECKING
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from .index import Index
 
 
 # Hints for chunk/slice/block/superblock computations:
@@ -11,24 +18,23 @@ import numpy as np
 # - In general, one should favor a small chunksize ( < 128 KB) if one
 # wants to reduce the latency for indexed queries. However, keep in
 # mind that a very low value of chunksize for big datasets may hurt
-# the performance by requering the HDF5 to use a lot of memory and CPU
+# the performance by requiring the HDF5 to use a lot of memory and CPU
 # for its internal B-Tree.
 
-def csformula(nrows):
-    """Return the fitted chunksize (a float value) for nrows."""
 
+def csformula(nrows: int) -> float:
+    """Return the fitted chunksize (a float value) for nrows."""
     # This formula has been computed using two points:
     # 2**12 = m * 2**(n + log10(10**6))
     # 2**15 = m * 2**(n + log10(10**9))
     # where 2**12 and 2**15 are reasonable values for chunksizes for indexes
     # with 10**6 and 10**9 elements respectively.
     # Yes, return a floating point number!
-    return 64 * 2**math.log10(nrows)
+    return 64 * 2 ** math.log10(nrows)
 
 
-def limit_er(expectedrows):
+def limit_er(expectedrows: int) -> int:
     """Protection against creating too small or too large chunks or slices."""
-
     if expectedrows < 10**5:
         expectedrows = 10**5
     elif expectedrows > 10**12:
@@ -36,18 +42,16 @@ def limit_er(expectedrows):
     return expectedrows
 
 
-def computechunksize(expectedrows):
+def computechunksize(expectedrows: int) -> int:
     """Get the optimum chunksize based on expectedrows."""
-
     expectedrows = limit_er(expectedrows)
     zone = int(math.log10(expectedrows))
     nrows = 10**zone
     return int(csformula(nrows))
 
 
-def computeslicesize(expectedrows, memlevel):
+def computeslicesize(expectedrows: int, memlevel: int) -> int:
     """Get the optimum slicesize based on expectedrows and memorylevel."""
-
     expectedrows = limit_er(expectedrows)
     # First, the optimum chunksize
     cs = csformula(expectedrows)
@@ -57,12 +61,12 @@ def computeslicesize(expectedrows, memlevel):
     ss = int(cs * memlevel**2)
     # We *need* slicesize to be an exact multiple of the actual chunksize
     ss = (ss // chunksize) * chunksize
-    ss *= 4    # slicesize should be at least divisible by 4
+    ss *= 4  # slicesize should be at least divisible by 4
     # ss cannot be bigger than 2**31 - 1 elements because of fundamental
     # reasons (this limitation comes mainly from the way of compute
     # indices for indexes, but also because C keysort is not implemented
     # yet for the string type).  Besides, it cannot be larger than
-    # 2**30, because limitiations of the optimized binary search code
+    # 2**30, because limitations of the optimized binary search code
     # (in idx-opt.c, the line ``mid = lo + (hi-lo)/2;`` will overflow
     # for values of ``lo`` and ``hi`` >= 2**30).  Finally, ss must be a
     # multiple of 4, so 2**30 must definitely be an upper limit.
@@ -71,14 +75,15 @@ def computeslicesize(expectedrows, memlevel):
     return ss
 
 
-def computeblocksize(expectedrows, compoundsize, lowercompoundsize):
+def computeblocksize(
+    expectedrows: int, compoundsize: int, lowercompoundsize: int
+) -> int:
     """Calculate the optimum number of superblocks made from compounds blocks.
 
     This is useful for computing the sizes of both blocks and
     superblocks (using the PyTables terminology for blocks in indexes).
 
     """
-
     nlowerblocks = (expectedrows // lowercompoundsize) + 1
     if nlowerblocks > 2**20:
         # Protection against too large number of compound blocks
@@ -90,7 +95,13 @@ def computeblocksize(expectedrows, compoundsize, lowercompoundsize):
     return size
 
 
-def calc_chunksize(expectedrows, optlevel=6, indsize=4, memlevel=4, node=None):
+def calc_chunksize(
+    expectedrows: int,
+    optlevel: int = 6,
+    indsize: int = 4,
+    memlevel: int = 4,
+    node: Index | None = None,
+) -> tuple[int, int, int, int]:
     """Calculate the HDF5 chunk size for index and sorted arrays.
 
     The logic to do that is based purely in experiments playing with
@@ -100,13 +111,16 @@ def calc_chunksize(expectedrows, optlevel=6, indsize=4, memlevel=4, node=None):
     optimized by doing more experiments.
 
     """
-
     chunksize = computechunksize(expectedrows)
     slicesize = computeslicesize(expectedrows, memlevel)
 
-    # Avoid excessive slicesize in Indexes, see https://github.com/PyTables/PyTables/issues/879
+    # Avoid excessive slicesize in Indexes,
+    # see https://github.com/PyTables/PyTables/issues/879
     if node is not None:
-        maxsize = node._v_file.params['BUFFER_TIMES'] * node._v_file.params['IO_BUFFER_SIZE']
+        maxsize = (
+            node._v_file.params["BUFFER_TIMES"]
+            * node._v_file.params["IO_BUFFER_SIZE"]
+        )
         while (slicesize * node.dtype.itemsize) > maxsize:
             slicesize = slicesize // 2
 
@@ -128,9 +142,10 @@ def calc_chunksize(expectedrows, optlevel=6, indsize=4, memlevel=4, node=None):
     return sizes
 
 
-def ccs_ultralight(optlevel, chunksize, slicesize):
+def ccs_ultralight(
+    optlevel: int, chunksize: int, slicesize: int
+) -> tuple[int, int]:
     """Correct the slicesize and the chunksize based on optlevel."""
-
     if optlevel in (0, 1, 2):
         slicesize //= 2
         slicesize += optlevel * slicesize
@@ -143,9 +158,10 @@ def ccs_ultralight(optlevel, chunksize, slicesize):
     return chunksize, slicesize
 
 
-def ccs_light(optlevel, chunksize, slicesize):
+def ccs_light(
+    optlevel: int, chunksize: int, slicesize: int
+) -> tuple[int, int]:
     """Correct the slicesize and the chunksize based on optlevel."""
-
     if optlevel in (0, 1, 2):
         slicesize //= 2
     elif optlevel in (3, 4, 5):
@@ -160,9 +176,10 @@ def ccs_light(optlevel, chunksize, slicesize):
     return chunksize, slicesize
 
 
-def ccs_medium(optlevel, chunksize, slicesize):
+def ccs_medium(
+    optlevel: int, chunksize: int, slicesize: int
+) -> tuple[int, int]:
     """Correct the slicesize and the chunksize based on optlevel."""
-
     if optlevel in (0, 1, 2):
         slicesize //= 2
     elif optlevel in (3, 4, 5):
@@ -177,9 +194,8 @@ def ccs_medium(optlevel, chunksize, slicesize):
     return chunksize, slicesize
 
 
-def ccs_full(optlevel, chunksize, slicesize):
+def ccs_full(optlevel: int, chunksize: int, slicesize: int) -> tuple[int, int]:
     """Correct the slicesize and the chunksize based on optlevel."""
-
     if optlevel in (0, 1, 2):
         slicesize //= 2
     elif optlevel in (3, 4, 5):
@@ -194,14 +210,15 @@ def ccs_full(optlevel, chunksize, slicesize):
     return chunksize, slicesize
 
 
-def calcoptlevels(nblocks, optlevel, indsize):
+def calcoptlevels(
+    nblocks: int, optlevel: int, indsize: int
+) -> tuple[bool, bool, bool, bool]:
     """Compute the optimizations to be done.
 
     The calculation is based on the number of blocks, optlevel and
     indexing mode.
 
     """
-
     if indsize == 2:  # light
         return col_light(nblocks, optlevel)
     elif indsize == 4:  # medium
@@ -210,9 +227,8 @@ def calcoptlevels(nblocks, optlevel, indsize):
         return col_full(nblocks, optlevel)
 
 
-def col_light(nblocks, optlevel):
+def col_light(nblocks: int, optlevel: int) -> tuple[bool, bool, bool, bool]:
     """Compute the optimizations to be done for light indexes."""
-
     optmedian, optstarts, optstops, optfull = (False,) * 4
 
     if 0 < optlevel <= 3:
@@ -225,9 +241,8 @@ def col_light(nblocks, optlevel):
     return optmedian, optstarts, optstops, optfull
 
 
-def col_medium(nblocks, optlevel):
+def col_medium(nblocks: int, optlevel: int) -> tuple[bool, bool, bool, bool]:
     """Compute the optimizations to be done for medium indexes."""
-
     optmedian, optstarts, optstops, optfull = (False,) * 4
 
     # Medium case
@@ -249,9 +264,8 @@ def col_medium(nblocks, optlevel):
     return optmedian, optstarts, optstops, optfull
 
 
-def col_full(nblocks, optlevel):
+def col_full(nblocks: int, optlevel: int) -> tuple[bool, bool, bool, bool]:
     """Compute the optimizations to be done for full indexes."""
-
     optmedian, optstarts, optstops, optfull = (False,) * 4
 
     # Full case
@@ -273,7 +287,9 @@ def col_full(nblocks, optlevel):
     return optmedian, optstarts, optstops, optfull
 
 
-def get_reduction_level(indsize, optlevel, slicesize, chunksize):
+def get_reduction_level(
+    indsize: int, optlevel: int, slicesize: int, chunksize: int
+) -> int:
     """Compute the reduction level based on indsize and optlevel."""
     rlevels = [
         [8, 8, 8, 8, 4, 4, 4, 2, 2, 1],  # 8-bit indices (ultralight)
@@ -334,39 +350,33 @@ infinityf = math.ldexp(1.0, 128)
 
 # "infinity" for several types
 infinitymap = {
-    'bool': [0, 1],
-    'int8': [-2**7, 2**7 - 1],
-    'uint8': [0, 2**8 - 1],
-    'int16': [-2**15, 2**15 - 1],
-    'uint16': [0, 2**16 - 1],
-    'int32': [-2**31, 2**31 - 1],
-    'uint32': [0, 2**32 - 1],
-    'int64': [-2**63, 2**63 - 1],
-    'uint64': [0, 2**64 - 1],
-    'float32': [-infinityf, infinityf],
-    'float64': [-infinity, infinity],
+    "bool": [0, 1],
+    "int8": [-(2**7), 2**7 - 1],
+    "uint8": [0, 2**8 - 1],
+    "int16": [-(2**15), 2**15 - 1],
+    "uint16": [0, 2**16 - 1],
+    "int32": [-(2**31), 2**31 - 1],
+    "uint32": [0, 2**32 - 1],
+    "int64": [-(2**63), 2**63 - 1],
+    "uint64": [0, 2**64 - 1],
+    "float32": [-infinityf, infinityf],
+    "float64": [-infinity, infinity],
 }
 
-if hasattr(np, 'float16'):
-    infinitymap['float16'] = [-np.float16(np.inf),
-                              np.float16(np.inf)]
-if hasattr(np, 'float96'):
-    infinitymap['float96'] = [-np.float96(np.inf),
-                              np.float96(np.inf)]
-if hasattr(np, 'float128'):
-    infinitymap['float128'] = [-np.float128(np.inf),
-                               np.float128(np.inf)]
-
-# deprecated API
-infinityMap = infinitymap
-infinityF = infinityf
+if hasattr(np, "float16"):
+    infinitymap["float16"] = [-np.float16(np.inf), np.float16(np.inf)]
+if hasattr(np, "float96"):
+    infinitymap["float96"] = [-np.float96(np.inf), np.float96(np.inf)]
+if hasattr(np, "float128"):
+    infinitymap["float128"] = [-np.float128(np.inf), np.float128(np.inf)]
 
 # Utility functions
 
 
-def inftype(dtype, itemsize, sign=+1):
+def inftype(
+    dtype: np.dtype, itemsize: int, sign: Literal[-1, 1] = 1
+) -> bytes | float | int:
     """Return a superior limit for maximum representable data type."""
-
     assert sign in [-1, +1]
 
     if dtype.kind == "S":
@@ -380,10 +390,10 @@ def inftype(dtype, itemsize, sign=+1):
         raise TypeError("Type %s is not supported" % dtype.name)
 
 
-def string_next_after(x, direction, itemsize):
-    """Return the next representable neighbor of x in the appropriate
-    direction."""
-
+def string_next_after(
+    x: bytes, direction: Literal[-1, 1], itemsize: int
+) -> bytes:
+    """Return the next neighbor of x in the specified direction."""
     assert direction in [-1, +1]
 
     # Pad the string with \x00 chars until itemsize completion
@@ -400,8 +410,8 @@ def string_next_after(x, direction, itemsize):
             # Maximum value, return this
             return b"".join(xlist)
         for xchar in xlist:
-            if ord(xchar) < 0xff:
-                xlist[i] = chr(ord(xchar) + 1).encode('ascii')
+            if ord(xchar) < 0xFF:
+                xlist[i] = chr(ord(xchar) + 1).encode("ascii")
                 break
             else:
                 xlist[i] = b"\x00"
@@ -412,7 +422,7 @@ def string_next_after(x, direction, itemsize):
             return b"".join(xlist)
         for xchar in xlist:
             if ord(xchar) > 0x00:
-                xlist[i] = chr(ord(xchar) - 1).encode('ascii')
+                xlist[i] = chr(ord(xchar) - 1).encode("ascii")
                 break
             else:
                 xlist[i] = b"\xff"
@@ -421,10 +431,10 @@ def string_next_after(x, direction, itemsize):
     return b"".join(xlist)
 
 
-def int_type_next_after(x, direction, itemsize):
-    """Return the next representable neighbor of x in the appropriate
-    direction."""
-
+def int_type_next_after(
+    x: float | int, direction: Literal[-1, 1], itemsize: int
+) -> int:
+    """Return the next neighbor of x in the specified direction."""
     assert direction in [-1, +1]
 
     # x is guaranteed to be either an int or a float
@@ -442,10 +452,10 @@ def int_type_next_after(x, direction, itemsize):
             return int(np.nextafter(x, x + 1)) + 1
 
 
-def bool_type_next_after(x, direction, itemsize):
-    """Return the next representable neighbor of x in the appropriate
-    direction."""
-
+def bool_type_next_after(
+    x: bool, direction: Literal[-1, 1], itemsize: int
+) -> bool:
+    """Return the next representable neighbor of x in the specified direction."""
     assert direction in [-1, +1]
 
     # x is guaranteed to be either a boolean
@@ -455,10 +465,13 @@ def bool_type_next_after(x, direction, itemsize):
         return True
 
 
-def nextafter(x, direction, dtype, itemsize):
-    """Return the next representable neighbor of x in the appropriate
-    direction."""
-
+def nextafter(
+    x: bool | bytes | float | int,
+    direction: Literal[-1, 0, 1],
+    dtype: np.dtype,
+    itemsize: int,
+) -> bool | bytes | int | float:
+    """Return the next representable neighbor of x in the specified direction."""
     assert direction in [-1, 0, +1]
     assert dtype.kind == "S" or type(x) in (bool, float, int)
 
@@ -468,9 +481,9 @@ def nextafter(x, direction, dtype, itemsize):
     if dtype.kind == "S":
         return string_next_after(x, direction, itemsize)
 
-    if dtype.kind in ['b']:
+    if dtype.kind in ["b"]:
         return bool_type_next_after(x, direction, itemsize)
-    elif dtype.kind in ['i', 'u']:
+    elif dtype.kind in ["i", "u"]:
         return int_type_next_after(x, direction, itemsize)
     elif dtype.kind == "f":
         if direction < 0:

@@ -1,44 +1,98 @@
 """Here is defined the Leaf class."""
 
-import warnings
+from __future__ import annotations
+
+import json
 import math
+import warnings
+from typing import Any, Literal, NamedTuple, Union, TYPE_CHECKING
+from pathlib import Path
+from functools import lru_cache
 
 import numpy as np
-try:
-    import cpuinfo
-    cpu_info = cpuinfo.get_cpu_info()
-except ImportError:
-    cpu_info = {}
 
-from .flavor import (check_flavor, internal_flavor, toarray,
-                     alias_map as flavor_alias_map)
 from .node import Node
-from .filters import Filters
 from .utils import byteorders, lazyattr, SizeType
-from .exceptions import PerformanceWarning
+from .flavor import check_flavor, internal_flavor, toarray
+from .flavor import alias_map as flavor_alias_map
+from .filters import Filters
+from .exceptions import (
+    NoSuchChunkError,
+    NotChunkAlignedError,
+    NotChunkedError,
+    PerformanceWarning,
+)
+
+if TYPE_CHECKING:
+    from .group import Group
 
 
-def csformula(expected_mb):
+# These should be declared as type aliases,
+# but ``TypeAlias`` requires Python >= 3.10
+# and ``type`` statements require Python >= 3.12.
+
+# ``np.typing.NDArray[np.uint8]`` requires NumPy >= 1.21.
+NPByteArray = np.ndarray[tuple[int], np.dtype[np.uint8]]
+
+# ``Buffer`` requires Python >= 3.12.
+BufferLike = Union[bytes, bytearray, memoryview, NPByteArray]
+
+
+def read_cached_cpu_info() -> dict[str, Any]:
+    """Load the CPU information from a cache file."""
+    try:
+        with open(Path.home() / ".pytables-cpuinfo.json") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def write_cached_cpu_info(cpu_info_dict: dict[str, Any]) -> None:
+    """Write CPU information to a cache file."""
+    with open(Path.home() / ".pytables-cpuinfo.json", "w") as f:
+        json.dump(cpu_info_dict, f, indent=4)
+
+
+@lru_cache(maxsize=1)
+def get_cpu_info() -> dict[str, Any]:
+    """Return a dictionary containing CPU information."""
+    cached_info = read_cached_cpu_info()
+    if cached_info:
+        return cached_info
+
+    try:
+        import cpuinfo
+    except ImportError:
+        return {}
+    cpu_info_dict = cpuinfo.get_cpu_info()
+    try:
+        write_cached_cpu_info(cpu_info_dict)
+    except OSError:
+        # cpu info cannot be stored.
+        # will need to be recomputed in the next process
+        pass
+    return cpu_info_dict
+
+
+def csformula(expected_mb: int) -> int:
     """Return the fitted chunksize for expected_mb."""
-
     # For a basesize of 8 KB, this will return:
     # 8 KB for datasets <= 1 MB
     # 1 MB for datasets >= 10 TB
     basesize = 8 * 1024  # 8 KB is a good minimum
-    return basesize * int(2**math.log10(expected_mb))
+    return basesize * int(2 ** math.log10(expected_mb))
 
 
-def limit_es(expected_mb):
+def limit_es(expected_mb: int) -> int:
     """Protection against creating too small or too large chunks."""
-
-    if expected_mb < 1:        # < 1 MB
+    if expected_mb < 1:  # < 1 MB
         expected_mb = 1
     elif expected_mb > 10**7:  # > 10 TB
         expected_mb = 10**7
     return expected_mb
 
 
-def calc_chunksize(expected_mb):
+def calc_chunksize(expected_mb: int) -> int:
     """Compute the optimum HDF5 chunksize for I/O purposes.
 
     Rational: HDF5 takes the data in bunches of chunksize length to
@@ -54,13 +108,53 @@ def calc_chunksize(expected_mb):
     always, your mileage may vary.
 
     """
-
     expected_mb = limit_es(expected_mb)
     zone = int(math.log10(expected_mb))
     expected_mb = 10**zone
     chunksize = csformula(expected_mb)
     # XXX: Multiply by 8 seems optimal for sequential access
     return chunksize * 8
+
+
+class ChunkInfo(NamedTuple):
+    """Information about storage for a given chunk.
+
+    It may also refer to a chunk which is within the dataset's shape but that
+    does not exist in storage, i.e. a missing chunk.
+
+    An instance of this named tuple class contains the following information,
+    in field order:
+
+    .. attribute:: start
+
+        The coordinates in dataset items where the chunk starts, a tuple of
+        integers with the same rank as the dataset.  These coordinates are
+        always aligned with chunk boundaries.  Also present for missing
+        chunks.
+
+    .. attribute:: filter_mask
+
+        An integer where each active bit signals that the filter in its
+        position in the pipeline was disabled when storing the chunk.  For
+        instance, ``0b10`` disables shuffling, ``0b100`` disables szip, and so
+        on.  ``None`` for missing chunks.
+
+    .. attribute:: offset
+
+        An integer which indicates the offset in bytes of chunk data as it
+        exists in storage.  ``None`` for missing chunks.
+
+    .. attribute:: size
+
+        An integer which indicates the size in bytes of chunk data as it
+        exists in storage.  ``None`` for missing chunks.
+
+    """
+
+    start: tuple[int, ...] | None
+    filter_mask: int | None
+    offset: int | None
+    size: int | None
 
 
 class Leaf(Node):
@@ -123,23 +217,27 @@ class Leaf(Node):
     (This is an easier-to-write alias of :attr:`Node._v_title`)."""
 
     @property
-    def name(self):
-        """The name of this node in its parent group (This is an
-        easier-to-write alias of :attr:`Node._v_name`)."""
+    def name(self) -> str:
+        """Name of the node.
+
+        The name of this node in its parent group (This is an
+        easier-to-write alias of :attr:`Node._v_name`).
+        """
         return self._v_name
 
     @property
-    def chunkshape(self):
-        """The HDF5 chunk size for chunked leaves (a tuple).
+    def chunkshape(self) -> tuple[int, ...]:
+        """HDF5 chunk size for chunked leaves (a tuple).
 
         This is read-only because you cannot change the chunk size of a
         leaf once it has been created.
         """
-        return getattr(self, '_v_chunkshape', None)
+        return getattr(self, "_v_chunkshape", None)
 
     @property
-    def object_id(self):
-        """A node identifier, which may change from run to run.
+    def object_id(self) -> int:
+        """Node identifier, which may change from run to run.
+
         (This is an easier-to-write alias of :attr:`Node._v_objectid`).
 
         .. versionchanged:: 3.0
@@ -149,14 +247,15 @@ class Leaf(Node):
         return self._v_objectid
 
     @property
-    def ndim(self):
-        """The number of dimensions of the leaf data.
+    def ndim(self) -> int:
+        """Return the number of dimensions of the leaf data.
 
-        .. versionadded: 2.4"""
+        .. versionadded: 2.4
+        """
         return len(self.shape)
 
     @lazyattr
-    def filters(self):
+    def filters(self) -> Filters:
         """Filter properties for this leaf.
 
         See Also
@@ -164,12 +263,11 @@ class Leaf(Node):
         Filters
 
         """
-
         return Filters._from_leaf(self)
 
     @property
-    def track_times(self):
-        """Whether timestamps for the leaf are recorded
+    def track_times(self) -> bool:
+        """Return True if the timestamps for the leaf are recorded.
 
         If the leaf is not a dataset, this will fail with HDF5ExtError.
 
@@ -182,44 +280,43 @@ class Leaf(Node):
         return self._get_obj_track_times()
 
     @property
-    def maindim(self):
-        """The dimension along which iterators work.
+    def maindim(self) -> int:
+        """Dimension along which iterators work.
 
         Its value is 0 (i.e. the first dimension) when the dataset is not
         extendable, and self.extdim (where available) for extendable ones.
         """
-
         if self.extdim < 0:
             return 0  # choose the first dimension
         return self.extdim
 
     @property
-    def flavor(self):
-        """The type of data object read from this leaf.
+    def flavor(self) -> Literal["numpy", "python"]:
+        """Type of the data object read from this leaf.
 
         It can be any of 'numpy' or 'python'.
 
         You can (and are encouraged to) use this property to get, set
         and delete the FLAVOR HDF5 attribute of the leaf. When the leaf
-        has no such attribute, the default flavor is used..
+        has no such attribute, the default flavor is used.
         """
-
         return self._flavor
 
     @flavor.setter
-    def flavor(self, flavor):
+    def flavor(self, flavor: Literal["numpy", "python"]) -> None:
         self._v_file._check_writable()
         check_flavor(flavor)
         self._v_attrs.FLAVOR = self._flavor = flavor  # logs the change
 
     @flavor.deleter
-    def flavor(self):
+    def flavor(self) -> None:
         del self._v_attrs.FLAVOR
         self._flavor = internal_flavor
 
     @property
-    def size_on_disk(self):
-        """
+    def size_on_disk(self) -> int:
+        """Size on disk of the object.
+
         The size of this leaf's data in bytes as it is stored on disk.  If the
         data is compressed, this shows the compressed size.  In the case of
         uncompressed, chunked data, this may be slightly larger than the amount
@@ -227,32 +324,39 @@ class Leaf(Node):
         """
         return self._get_storage_size()
 
-    def __init__(self, parentnode, name,
-                 new=False, filters=None,
-                 byteorder=None, _log=True,
-                 track_times=True):
+    def __init__(
+        self,
+        parentnode: Group,
+        name: str,
+        new: bool = False,
+        filters: Filters | None = None,
+        byteorder: Literal["little", "big", None] = None,
+        _log: bool = True,
+        track_times: bool = True,
+    ) -> None:
         self._v_new = new
         """Is this the first time the node has been created?"""
-        self.nrowsinbuf = None
+        self.nrowsinbuf: int | None = None
         """
         The number of rows that fits in internal input buffers.
 
         You can change this to fine-tune the speed or memory
         requirements of your application.
         """
-        self._flavor = None
+        self._flavor: Literal["numpy", "python", None] = None
         """Private storage for the `flavor` property."""
 
         if new:
             # Get filter properties from parent group if not given.
             if filters is None:
                 filters = parentnode._v_filters
-            self.__dict__['filters'] = filters  # bypass the property
+            self.__dict__["filters"] = filters  # bypass the property
 
-            if byteorder not in (None, 'little', 'big'):
+            if byteorder not in (None, "little", "big"):
                 raise ValueError(
                     "the byteorder can only take 'little' or 'big' values "
-                    "and you passed: %s" % byteorder)
+                    "and you passed: %s" % byteorder
+                )
             self.byteorder = byteorder
             """The byte ordering of the leaf data *on disk*."""
 
@@ -263,7 +367,7 @@ class Leaf(Node):
 
         super().__init__(parentnode, name, _log)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return the length of the main dimension of the leaf data.
 
         Please note that this may raise an OverflowError on 32-bit platforms
@@ -271,13 +375,14 @@ class Leaf(Node):
         Python that you can work around by using the nrows or shape attributes.
 
         """
-
         return self.nrows
 
-    def __str__(self):
-        """The string representation for this object is its pathname in the
-        HDF5 object tree plus some additional metainfo."""
+    def __str__(self) -> str:
+        """Return the string representation of the object.
 
+        The string representation for this object is its pathname in the
+        HDF5 object tree plus some additional metainfo.
+        """
         filters = []
         if self.filters.fletcher32:
             filters.append("fletcher32")
@@ -287,45 +392,49 @@ class Leaf(Node):
             if self.filters.bitshuffle:
                 filters.append("bitshuffle")
             filters.append(f"{self.filters.complib}({self.filters.complevel})")
-        return (f"{self._v_pathname} ({self.__class__.__name__}"
-                f"{self.shape}{', '.join(filters)}) {self._v_title!r}")
+        return (
+            f"{self._v_pathname} ({self.__class__.__name__}"
+            f"{self.shape}{', '.join(filters)}) {self._v_title!r}"
+        )
 
-    def _g_post_init_hook(self):
+    def _g_post_init_hook(self) -> None:
         """Code to be run after node creation and before creation logging.
 
         This method gets or sets the flavor of the leaf.
 
         """
-
         super()._g_post_init_hook()
         if self._v_new:  # set flavor of new node
             if self._flavor is None:
                 self._flavor = internal_flavor
             else:  # flavor set at creation time, do not log
-                if self._v_file.params['PYTABLES_SYS_ATTRS']:
-                    self._v_attrs._g__setattr('FLAVOR', self._flavor)
+                if self._v_file.params["PYTABLES_SYS_ATTRS"]:
+                    self._v_attrs._g__setattr("FLAVOR", self._flavor)
         else:  # get flavor of existing node (if any)
-            if self._v_file.params['PYTABLES_SYS_ATTRS']:
-                flavor = getattr(self._v_attrs, 'FLAVOR', internal_flavor)
+            if self._v_file.params["PYTABLES_SYS_ATTRS"]:
+                flavor = getattr(self._v_attrs, "FLAVOR", internal_flavor)
                 self._flavor = flavor_alias_map.get(flavor, flavor)
             else:
                 self._flavor = internal_flavor
 
-    def _calc_chunkshape(self, expectedrows, rowsize, itemsize):
+    def _calc_chunkshape(
+        self, expectedrows: int, rowsize: int, itemsize: int
+    ) -> tuple[int, ...]:
         """Calculate the shape for the HDF5 chunk."""
-
         # In case of a scalar shape, return the unit chunksize
         if self.shape == ():
             return (SizeType(1),)
 
         # Compute the chunksize
-        MB = 1024 * 1024
+        MB = 1024 * 1024  # noqa: N806
         expected_mb = (expectedrows * rowsize) // MB
         chunksize = calc_chunksize(expected_mb)
         complib = self.filters.complib
-        if (complib is not None and
-            complib.startswith("blosc2") and
-            self._c_classid in ('TABLE', 'CARRAY', 'EARRAY')):
+        if (
+            complib is not None
+            and complib.startswith("blosc2")
+            and self._c_classid in ("TABLE", "CARRAY", "EARRAY")
+        ):
             # Blosc2 can introspect into blocks, so we can increase the
             # chunksize for improving HDF5 perf for its internal btree.
             # For the time being, this has been implemented efficiently
@@ -334,20 +443,24 @@ class Leaf(Node):
             # Use a decent default value for chunksize
             chunksize *= 16
             # Now, go explore the L3 size and try to find a smarter chunksize
-            if 'l3_cache_size' in cpu_info:
+            cpu_info = get_cpu_info()
+            if "l3_cache_size" in cpu_info:
                 # In general, is a good idea to set the chunksize equal to L3
-                l3_cache_size = cpu_info['l3_cache_size']
+                l3_cache_size = cpu_info["l3_cache_size"]
                 # cpuinfo sometimes returns cache sizes as strings (like,
                 # "4096 KB"), so refuse the temptation to guess and use the
                 # value only when it is an actual int.
                 # Also, sometimes cpuinfo does not return a correct L3 size;
                 # so in general, enforcing L3 > L2 is a good sanity check.
-                l2_cache_size = cpu_info.get('l2_cache_size', "Not found")
-                if (type(l3_cache_size) is int and
-                    type(l2_cache_size) is int and
-                    l3_cache_size > l2_cache_size):
+                l2_cache_size = cpu_info.get("l2_cache_size", "Not found")
+                if (
+                    type(l3_cache_size) is int
+                    and type(l2_cache_size) is int
+                    and l3_cache_size > l2_cache_size
+                ):
                     chunksize = l3_cache_size
-            # In Blosc2, the chunksize cannot be larger than 2 GB - BLOSC2_MAX_BUFFERSIZE
+            # In Blosc2, the chunksize cannot be larger than 2 GB
+            # BLOSC2_MAX_BUFFERSIZE
             if chunksize > 2**31 - 32:
                 chunksize = 2**31 - 32
 
@@ -379,13 +492,12 @@ class Leaf(Node):
 
         return tuple(SizeType(s) for s in chunkshape)
 
-    def _calc_nrowsinbuf(self):
+    def _calc_nrowsinbuf(self) -> int:
         """Calculate the number of rows that fits on a PyTables buffer."""
-
         params = self._v_file.params
         # Compute the nrowsinbuf
         rowsize = self.rowsize
-        buffersize = params['IO_BUFFER_SIZE']
+        buffersize = params["IO_BUFFER_SIZE"]
         if rowsize != 0:
             nrowsinbuf = buffersize // rowsize
         else:
@@ -395,21 +507,32 @@ class Leaf(Node):
         if nrowsinbuf == 0:
             nrowsinbuf = 1
             # If rowsize is too large, issue a Performance warning
-            maxrowsize = params['BUFFER_TIMES'] * buffersize
+            maxrowsize = params["BUFFER_TIMES"] * buffersize
             if rowsize > maxrowsize:
-                warnings.warn("""\
-The Leaf ``%s`` is exceeding the maximum recommended rowsize (%d bytes);
-be ready to see PyTables asking for *lots* of memory and possibly slow
-I/O.  You may want to reduce the rowsize by trimming the value of
-dimensions that are orthogonal (and preferably close) to the *main*
-dimension of this leave.  Alternatively, in case you have specified a
-very small/large chunksize, you may want to increase/decrease it."""
-                              % (self._v_pathname, maxrowsize),
-                              PerformanceWarning)
+                warnings.warn(
+                    f"The Leaf ``{self._v_pathname}`` is exceeding the "
+                    f"maximum recommended rowsize ({maxrowsize} bytes); "
+                    f"be ready to see PyTables asking for *lots* "
+                    f"of memory and possibly slow I/O.  "
+                    f"You may want to reduce the rowsize by trimming the "
+                    f"value of dimensions that are orthogonal (and preferably "
+                    f"close) to the *main* dimension of this leave.  "
+                    f"Alternatively, in case you have specified a very "
+                    f"small/large chunksize, you may want to "
+                    f"increase/decrease it.",
+                    PerformanceWarning,
+                )
         return nrowsinbuf
 
     # This method is appropriate for calls to __getitem__ methods
-    def _process_range(self, start, stop, step, dim=None, warn_negstep=True):
+    def _process_range(
+        self,
+        start: int,
+        stop: int,
+        step: int,
+        dim: int | None = None,
+        warn_negstep: bool = True,
+    ) -> tuple[int, int, int]:
         if dim is None:
             nrows = self.nrows  # self.shape[self.maindim]
         else:
@@ -425,38 +548,50 @@ very small/large chunksize, you may want to increase/decrease it."""
         return slice(start, stop, step).indices(int(nrows))
 
     # This method is appropriate for calls to read() methods
-    def _process_range_read(self, start, stop, step, warn_negstep=True):
+    def _process_range_read(
+        self, start: int, stop: int, step: int, warn_negstep: bool = True
+    ) -> tuple[int, int, int]:
         nrows = self.nrows
         if start is not None and stop is None and step is None:
             # Protection against start greater than available records
             # nrows == 0 is a special case for empty objects
             if 0 < nrows <= start:
-                raise IndexError("start of range (%s) is greater than "
-                                 "number of rows (%s)" % (start, nrows))
+                raise IndexError(
+                    "start of range (%s) is greater than "
+                    "number of rows (%s)" % (start, nrows)
+                )
             step = 1
             if start == -1:  # corner case
                 stop = nrows
             else:
                 stop = start + 1
         # Finally, get the correct values (over the main dimension)
-        start, stop, step = self._process_range(start, stop, step,
-                                                warn_negstep=warn_negstep)
+        start, stop, step = self._process_range(
+            start, stop, step, warn_negstep=warn_negstep
+        )
         return (start, stop, step)
 
-    def _g_copy(self, newparent, newname, recursive, _log=True, **kwargs):
+    def _g_copy(
+        self,
+        newparent: Group,
+        newname: str,
+        recursive: bool,
+        _log: bool = True,
+        **kwargs,
+    ) -> Leaf:
         # Compute default arguments.
-        start = kwargs.pop('start', None)
-        stop = kwargs.pop('stop', None)
-        step = kwargs.pop('step', None)
-        title = kwargs.pop('title', self._v_title)
-        filters = kwargs.pop('filters', self.filters)
-        chunkshape = kwargs.pop('chunkshape', self.chunkshape)
-        copyuserattrs = kwargs.pop('copyuserattrs', True)
-        stats = kwargs.pop('stats', None)
-        if chunkshape == 'keep':
+        start = kwargs.pop("start", None)
+        stop = kwargs.pop("stop", None)
+        step = kwargs.pop("step", None)
+        title = kwargs.pop("title", self._v_title)
+        filters = kwargs.pop("filters", self.filters)
+        chunkshape = kwargs.pop("chunkshape", self.chunkshape)
+        copyuserattrs = kwargs.pop("copyuserattrs", True)
+        stats = kwargs.pop("stats", None)
+        if chunkshape == "keep":
             chunkshape = self.chunkshape  # Keep the original chunkshape
-        elif chunkshape == 'auto':
-            chunkshape = None             # Will recompute chunkshape
+        elif chunkshape == "auto":
+            chunkshape = None  # Will recompute chunkshape
 
         # Fix arguments with explicit None values for backwards compatibility.
         if title is None:
@@ -465,26 +600,37 @@ very small/large chunksize, you may want to increase/decrease it."""
             filters = self.filters
 
         # Create a copy of the object.
-        (new_node, bytes) = self._g_copy_with_stats(
-            newparent, newname, start, stop, step,
-            title, filters, chunkshape, _log, **kwargs)
+        (new_node, bytes_) = self._g_copy_with_stats(
+            newparent,
+            newname,
+            start,
+            stop,
+            step,
+            title,
+            filters,
+            chunkshape,
+            _log,
+            **kwargs,
+        )
 
         # Copy user attributes if requested (or the flavor at least).
         if copyuserattrs:
             self._v_attrs._g_copy(new_node._v_attrs, copyclass=True)
-        elif 'FLAVOR' in self._v_attrs:
-            if self._v_file.params['PYTABLES_SYS_ATTRS']:
-                new_node._v_attrs._g__setattr('FLAVOR', self._flavor)
+        elif "FLAVOR" in self._v_attrs:
+            if self._v_file.params["PYTABLES_SYS_ATTRS"]:
+                new_node._v_attrs._g__setattr("FLAVOR", self._flavor)
         new_node._flavor = self._flavor  # update cached value
 
         # Update statistics if needed.
         if stats is not None:
-            stats['leaves'] += 1
-            stats['bytes'] += bytes
+            stats["leaves"] += 1
+            stats["bytes"] += bytes_
 
         return new_node
 
-    def _g_fix_byteorder_data(self, data, dbyteorder):
+    def _g_fix_byteorder_data(
+        self, data: np.ndarray, dbyteorder: str
+    ) -> np.ndarray:
         """Fix the byteorder of data passed in constructors."""
         dbyteorder = byteorders[dbyteorder]
         # If self.byteorder has not been passed as an argument of
@@ -496,7 +642,7 @@ very small/large chunksize, you may want to increase/decrease it."""
         # place that we have to do the conversion manually. In all the
         # other cases, it will be HDF5 the responsible for doing the
         # byteswap properly.
-        if dbyteorder in ['little', 'big']:
+        if dbyteorder in ["little", "big"]:
             if dbyteorder != self.byteorder:
                 # if data is not writeable, do a copy first
                 if not data.flags.writeable:
@@ -508,12 +654,12 @@ very small/large chunksize, you may want to increase/decrease it."""
             self.byteorder = "irrelevant"
         return data
 
-    def _point_selection(self, key):
+    def _point_selection(self, key: list | tuple | np.ndarray) -> np.ndarray:
         """Perform a point-wise selection.
 
         `key` can be any of the following items:
 
-        * A boolean array with the same shape than self. Those positions
+        * A boolean array with the same shape as self. Those positions
           with True values will signal the coordinates to be returned.
 
         * A numpy array (or list or tuple) with the point coordinates.
@@ -549,21 +695,24 @@ very small/large chunksize, you may want to increase/decrease it."""
         if len(key) == 0:
             return np.array([], dtype="i8")
 
-        if key.dtype.kind == 'b':
+        if key.dtype.kind == "b":
             if not key.shape == self.shape:
                 raise IndexError(
-                    "Boolean indexing array has incompatible shape")
+                    "Boolean indexing array has incompatible shape"
+                )
             # Get the True coordinates (64-bit indices!)
-            coords = np.asarray(key.nonzero(), dtype='i8')
+            coords = np.asarray(key.nonzero(), dtype="i8")
             coords = np.transpose(coords)
-        elif key.dtype.kind == 'i' or key.dtype.kind == 'u':
+        elif key.dtype.kind == "i" or key.dtype.kind == "u":
             if len(key.shape) > 2:
                 raise IndexError(
-                    "Coordinate indexing array has incompatible shape")
+                    "Coordinate indexing array has incompatible shape"
+                )
             elif len(key.shape) == 2:
                 if key.shape[0] != len(self.shape):
                     raise IndexError(
-                        "Coordinate indexing array has incompatible shape")
+                        "Coordinate indexing array has incompatible shape"
+                    )
                 coords = np.asarray(key, dtype="i8")
                 coords = np.transpose(coords)
             else:
@@ -589,8 +738,31 @@ very small/large chunksize, you may want to increase/decrease it."""
             coords = coords.copy()
         return coords
 
+    def _check_chunked(self) -> None:
+        if self.chunkshape is None:
+            raise NotChunkedError("The dataset is not chunked")
+
+    def _check_chunk_within(self, coords: tuple[int, ...]) -> None:
+        if len(coords) != self.ndim:
+            raise ValueError(
+                f"Chunk coordinates do not match dataset shape: "
+                f"{coords} !~ {self.shape}"
+            )
+        if any(c < 0 or c >= s for (c, s) in zip(coords, self.shape)):
+            raise IndexError(
+                f"Chunk coordinates not within dataset shape: "
+                f"{coords} <> {self.shape}"
+            )
+
+    def _check_chunk_coords(self, coords: tuple[int, ...]) -> None:
+        if any(c % cs for (c, cs) in zip(coords, self.chunkshape)):
+            raise NotChunkAlignedError(
+                f"Coordinates are not multiples of chunk shape: "
+                f"{tuple(coords)} !* {self.chunkshape}"
+            )
+
     # Tree manipulation
-    def remove(self):
+    def remove(self) -> None:
         """Remove this node from the hierarchy.
 
         This method has the behavior described
@@ -598,30 +770,38 @@ very small/large chunksize, you may want to increase/decrease it."""
         since leaves do not have child nodes.
 
         """
-
         self._f_remove(False)
 
-    def rename(self, newname):
+    def rename(self, newname: str) -> None:
         """Rename this node in place.
 
         This method has the behavior described in :meth:`Node._f_rename()`.
 
         """
-
         self._f_rename(newname)
 
-    def move(self, newparent=None, newname=None,
-             overwrite=False, createparents=False):
+    def move(
+        self,
+        newparent: Group | None = None,
+        newname: str | None = None,
+        overwrite: bool = False,
+        createparents: bool = False,
+    ) -> None:
         """Move or rename this node.
 
         This method has the behavior described in :meth:`Node._f_move`
 
         """
-
         self._f_move(newparent, newname, overwrite, createparents)
 
-    def copy(self, newparent=None, newname=None,
-             overwrite=False, createparents=False, **kwargs):
+    def copy(
+        self,
+        newparent: Group | None = None,
+        newname: str | None = None,
+        overwrite: bool = False,
+        createparents: bool = False,
+        **kwargs,
+    ) -> Leaf:
         """Copy this node and return the new one.
 
         This method has the behavior described in :meth:`Node._f_copy`. Please
@@ -660,18 +840,22 @@ very small/large chunksize, you may want to increase/decrease it."""
         chunkshape
             The chunkshape of the new leaf.  It supports a couple of special
             values.  A value of keep means that the chunkshape will be the same
-            than original leaf (this is the default).  A value of auto means
+            as original leaf (this is the default).  A value of auto means
             that a new shape will be computed automatically in order to ensure
-            best performance when accessing the dataset through the main
+            the best performance when accessing the dataset through the main
             dimension.  Any other value should be an integer or a tuple
             matching the dimensions of the leaf.
 
         """
-
         return self._f_copy(
-            newparent, newname, overwrite, createparents, **kwargs)
+            newparent,
+            newname,
+            overwrite,
+            createparents=createparents,
+            **kwargs,
+        )
 
-    def truncate(self, size):
+    def truncate(self, size: int) -> None:
         """Truncate the main dimension to be size rows.
 
         If the main dimension previously was larger than this size, the extra
@@ -682,51 +866,46 @@ very small/large chunksize, you may want to increase/decrease it."""
         else a TypeError will be raised.
 
         """
-
         # A non-enlargeable arrays (Array, CArray) cannot be truncated
         if self.extdim < 0:
             raise TypeError("non-enlargeable datasets cannot be truncated")
         self._g_truncate(size)
 
-    def isvisible(self):
-        """Is this node visible?
+    def isvisible(self) -> bool:
+        """Return True if this node is visible.
 
         This method has the behavior described in :meth:`Node._f_isvisible()`.
 
         """
-
         return self._f_isvisible()
 
     # Attribute handling
-    def get_attr(self, name):
+    def get_attr(self, name: str) -> Any:
         """Get a PyTables attribute from this node.
 
         This method has the behavior described in :meth:`Node._f_getattr`.
 
         """
-
         return self._f_getattr(name)
 
-    def set_attr(self, name, value):
+    def set_attr(self, name: str, value: Any) -> None:
         """Set a PyTables attribute for this node.
 
         This method has the behavior described in :meth:`Node._f_setattr()`.
 
         """
-
         self._f_setattr(name, value)
 
-    def del_attr(self, name):
+    def del_attr(self, name: str) -> None:
         """Delete a PyTables attribute from this node.
 
         This method has the behavior described in :meth:`Node_f_delAttr`.
 
         """
-
         self._f_delattr(name)
 
     # Data handling
-    def flush(self):
+    def flush(self) -> None:
         """Flush pending data to disk.
 
         Saves whatever remaining buffered data to disk. It also releases
@@ -735,10 +914,123 @@ very small/large chunksize, you may want to increase/decrease it."""
         PyTables to keep memory requirements low.
 
         """
-
         self._g_flush()
 
-    def _f_close(self, flush=True):
+    def chunk_info(self, coords: tuple[int, ...]) -> ChunkInfo:
+        """Get storage information about the chunk containing the `coords`.
+
+        The coordinates `coords` are a tuple of integers with the same rank as
+        the dataset.
+
+        Return a :class:`ChunkInfo` instance with the information.
+
+        The coordinates need not be aligined with chunk boundaries.  This
+        means that this method may be used to get the start coordinates of the
+        chunk that contains the item at the given coordinates, for use with
+        other direct chunking operations (see :attr:`ChunkInfo.start`).
+
+        If the coordinates are within the dataset's shape but there is no such
+        chunk in storage (missing chunk), a :class:`ChunkInfo` with a valid
+        ``start`` and ``filter_mask = offset = size = None`` is returned.  If
+        the coordinates are beyond the shape, :exc:`IndexError` is raised
+        (even if the start of the chunk would fall within the shape).
+
+        Calling this method on a non-chunked dataset raises a
+        :exc:`NotChunkedError`.
+
+        """
+        self._check_chunked()
+        self._check_chunk_within(coords)
+
+        coords = np.array(coords, dtype=SizeType)
+        filter_mask, offset, size = self._g_chunk_info(coords)
+
+        # Align coordinates to chunk boundary.
+        chunkshape = self.chunkshape
+        coords //= chunkshape
+        coords *= chunkshape
+        return ChunkInfo(tuple(coords.tolist()), filter_mask, offset, size)
+
+    def read_chunk(
+        self,
+        coords: tuple[int, ...],
+        out: bytearray | NPByteArray | None = None,
+    ) -> bytes | memoryview:
+        """Get the raw chunk that starts at the given `coords` from storage.
+
+        The coordinates `coords` are a tuple of integers with the same rank as
+        the dataset.  If they are not multiples of its chunkshape,
+        :exc:`NotChunkAlignedError` is raised.
+
+        If a buffer-like `out` argument is given, it receives chunk data.  If
+        it has insufficient storage for the chunk, :exc:`ValueError` is raised
+        (use :meth:`chunk_info()` to get the required capacity).
+
+        The obtained data is supposed to have gone at storage time through
+        dataset filters, minus those in the chunk's filter mask (use
+        :meth:`chunk_info()` to get it).
+
+        Return the chunk's raw content, either as a `bytes` instance (if `out`
+        is ``None``) or as a `memoryview` over the object given as `out`.
+
+        Reading a chunk within the dataset's shape, but not in storage
+        (missing chunk) raises a :exc:`NoSuchChunkError`.  If the chunk is
+        beyond the shape, :exc:`IndexError` is raised.
+
+        Calling this method on a non-chunked dataset raises a
+        :exc:`NotChunkedError`.
+
+        """
+        self._check_chunked()
+        self._check_chunk_within(coords)
+        self._check_chunk_coords(coords)
+
+        if out is not None:
+            out = np.ndarray((len(out),), dtype="u1", buffer=out)
+
+        coords = np.array(coords, dtype=SizeType)
+        chunk = self._g_read_chunk(coords, out)
+        if chunk is None:
+            raise NoSuchChunkError(
+                f"Can't read missing chunk at coordinates " f"{tuple(coords)}"
+            )
+        return chunk.tobytes() if out is None else memoryview(out)
+
+    def write_chunk(
+        self, coords: tuple[int, ...], data: BufferLike, filter_mask: int = 0
+    ) -> None:
+        """Write `data` to storage for the chunk starting at the given `coords`.
+
+        The coordinates `coords` are a tuple of integers with the same rank as
+        the dataset.  If they are not multiples of its chunkshape,
+        :exc:`NotChunkAlignedError` is raised.
+
+        The content of the buffer-like `data` must already have gone through
+        dataset filters, minus those in the given `filter_mask` (which is to
+        be saved along data; see :attr:`ChunkInfo.filter_mask`).
+
+        Writing a chunk which is already in storage replaces it, otherwise it
+        is added to storage as long as it is within the dataset's shape
+        (missing chunk).  This means that you may use :meth:`truncate()` to
+        grow an enlargeable dataset cheaply (as no chunk data is written),
+        then sparsely write selected chunks in arbitrary order.
+
+        If the chunk is beyond the dataset's shape, :exc:`IndexError` is
+        raised.
+
+        Calling this method on a non-chunked dataset raises a
+        :exc:`NotChunkedError`.
+
+        """
+        self._check_chunked()
+        self._check_chunk_within(coords)
+        self._check_chunk_coords(coords)
+
+        coords = np.array(coords, dtype=SizeType)
+        data = np.ndarray((len(data),), dtype="u1", buffer=data)
+        self._g_write_chunk(coords, data, filter_mask)
+
+    def _f_close(self, flush: bool = True) -> None:
         """Close this node in the tree.
 
         This method has the behavior described in :meth:`Node._f_close`.
@@ -746,7 +1038,6 @@ very small/large chunksize, you may want to increase/decrease it."""
         pending data to disk or not before closing.
 
         """
-
         if not self._v_isopen:
             return  # the node is already closed or not initialized
 
@@ -763,11 +1054,10 @@ very small/large chunksize, you may want to increase/decrease it."""
         # Close myself as a node.
         super()._f_close()
 
-    def close(self, flush=True):
+    def close(self, flush: bool = True) -> None:
         """Close this node in the tree.
 
         This method is completely equivalent to :meth:`Leaf._f_close`.
 
         """
-
         self._f_close(flush)

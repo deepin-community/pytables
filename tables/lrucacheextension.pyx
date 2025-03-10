@@ -28,14 +28,16 @@ cdef extern from "Python.h":
 import sys
 
 import numpy as np
+
+from numpy cimport import_array, ndarray, PyArray_DATA
 from libc.string cimport memcpy, strcmp
 from cpython.unicode cimport PyUnicode_Check
-from numpy cimport import_array, ndarray, PyArray_DATA
 
-from .parameters import (DISABLE_EVERY_CYCLES, ENABLE_EVERY_CYCLES,
-  LOWEST_HIT_RATIO)
-
-
+from .parameters import (
+    DISABLE_EVERY_CYCLES,
+    ENABLE_EVERY_CYCLES,
+    LOWEST_HIT_RATIO,
+)
 
 #----------------------------------------------------------------------------
 # Initialization code.
@@ -274,7 +276,7 @@ cdef class BaseCache:
     self.seqn_ = self.seqn_ + 1
     if self.seqn_ < 0:
       # Ooops, the counter has run out of range! Reset all the access times.
-      self.atimes[:] = sys.maxint
+      self.atimes[:] = sys.maxsize
       # Set the counter to 1 (to indicate that it is newer than existing ones)
       self.seqn_ = 1
     return self.seqn_

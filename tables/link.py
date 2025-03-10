@@ -15,6 +15,9 @@ Misc variables:
 
 """
 
+from __future__ import annotations
+
+from typing import Any, Literal, NoReturn, TYPE_CHECKING
 from pathlib import Path
 
 import tables as tb
@@ -24,10 +27,14 @@ from .node import Node
 from .utils import lazyattr
 from .attributeset import AttributeSet
 
+if TYPE_CHECKING:
+    from .group import Group
 
-def _g_get_link_class(parent_id, name):
+
+def _g_get_link_class(
+    parent_id: int, name: str
+) -> Literal["ExternalLink", "HardLink", "SoftLink", "UnImplemented"]:
     """Guess the link class."""
-
     return linkextension._get_link_class(parent_id, name)
 
 
@@ -53,26 +60,39 @@ class Link(Node):
 
     # Properties
     @lazyattr
-    def _v_attrs(self):
-        """
+    def _v_attrs(self) -> AttributeSet:
+        """Attributes.
+
         A *NoAttrs* instance replacing the typical *AttributeSet* instance of
         other node objects.  The purpose of *NoAttrs* is to make clear that
         HDF5 attributes are not supported in link nodes.
         """
+
         class NoAttrs(AttributeSet):
-            def __getattr__(self, name):
-                raise KeyError("you cannot get attributes from this "
-                               "`%s` instance" % self.__class__.__name__)
+            def __getattr__(self, name: str) -> NoReturn:
+                raise KeyError(
+                    "you cannot get attributes from this "
+                    "`%s` instance" % self.__class__.__name__
+                )
 
-            def __setattr__(self, name, value):
-                raise KeyError("you cannot set attributes to this "
-                               "`%s` instance" % self.__class__.__name__)
+            def __setattr__(self, name: str, value: Any) -> NoReturn:
+                raise KeyError(
+                    "you cannot set attributes to this "
+                    "`%s` instance" % self.__class__.__name__
+                )
 
-            def _g_close(self):
+            def _g_close(self) -> None:
                 pass
+
         return NoAttrs(self)
 
-    def __init__(self, parentnode, name, target=None, _log=False):
+    def __init__(
+        self,
+        parentnode: Group,
+        name: str,
+        target: str | None = None,
+        _log: bool = False,
+    ) -> None:
         self._v_new = target is not None
         self.target = target
         """The path string to the pointed node."""
@@ -80,8 +100,13 @@ class Link(Node):
         super().__init__(parentnode, name, _log)
 
     # Public and tailored versions for copy, move, rename and remove methods
-    def copy(self, newparent=None, newname=None,
-             overwrite=False, createparents=False):
+    def copy(
+        self,
+        newparent: Group | None = None,
+        newname: str | None = None,
+        overwrite: bool = False,
+        createparents: bool = False,
+    ) -> Link:
         """Copy this link and return the new one.
 
         See :meth:`Node._f_copy` for a complete explanation of the arguments.
@@ -89,36 +114,43 @@ class Link(Node):
         child nodes.
 
         """
-
-        newnode = self._f_copy(newparent=newparent, newname=newname,
-                               overwrite=overwrite,
-                               createparents=createparents)
+        newnode = self._f_copy(
+            newparent=newparent,
+            newname=newname,
+            overwrite=overwrite,
+            createparents=createparents,
+        )
         # Insert references to a `newnode` via `newname`
         newnode._v_parent._g_refnode(newnode, newname, True)
         return newnode
 
-    def move(self, newparent=None, newname=None, overwrite=False):
+    def move(
+        self,
+        newparent: Group | None = None,
+        newname: str | None = None,
+        overwrite: bool = False,
+    ) -> None:
         """Move or rename this link.
 
         See :meth:`Node._f_move` for a complete explanation of the arguments.
 
         """
+        return self._f_move(
+            newparent=newparent, newname=newname, overwrite=overwrite
+        )
 
-        return self._f_move(newparent=newparent, newname=newname,
-                            overwrite=overwrite)
-
-    def remove(self):
+    def remove(self) -> None:
         """Remove this link from the hierarchy."""
-
         return self._f_remove()
 
-    def rename(self, newname=None, overwrite=False):
+    def rename(
+        self, newname: str | None = None, overwrite: bool = False
+    ) -> None:
         """Rename this link in place.
 
         See :meth:`Node._f_rename` for a complete explanation of the arguments.
 
         """
-
         return self._f_rename(newname=newname, overwrite=overwrite)
 
     def __repr__(self):
@@ -151,7 +183,6 @@ class SoftLink(linkextension.SoftLink, Link):
 
     Examples
     --------
-
     ::
 
         >>> import numpy as np
@@ -176,25 +207,35 @@ class SoftLink(linkextension.SoftLink, Link):
         (array([-1,  1,  2,  3,  4,  5,  6,  7,  8,  9]), dtype('int64'))
         >>> f.close()
 
-
     """
 
     # Class identifier.
-    _c_classid = 'SOFTLINK'
+    _c_classid = "SOFTLINK"
 
     # attributes with these names/prefixes are treated as attributes of the
     # SoftLink rather than the target node
-    _link_attrnames = ('target', 'dereference', 'is_dangling', 'copy', 'move',
-                       'remove', 'rename', '__init__', '__str__', '__repr__',
-                       '__unicode__', '__class__', '__dict__')
-    _link_attrprefixes = ('_f_', '_c_', '_g_', '_v_')
+    _link_attrnames = (
+        "target",
+        "dereference",
+        "is_dangling",
+        "copy",
+        "move",
+        "remove",
+        "rename",
+        "__init__",
+        "__str__",
+        "__repr__",
+        "__unicode__",
+        "__class__",
+        "__dict__",
+    )
+    _link_attrprefixes = ("_f_", "_c_", "_g_", "_v_")
 
-    def __call__(self):
+    def __call__(self) -> Node | None:
         """Dereference `self.target` and return the object.
 
         Examples
         --------
-
         ::
 
             >>> f = tb.open_file('tables/tests/slink.h5')
@@ -207,27 +248,29 @@ class SoftLink(linkextension.SoftLink, Link):
         """
         return self.dereference()
 
-    def dereference(self):
-
+    def dereference(self) -> Node | None:
+        """Dereference a link."""
         if self._v_isopen:
             target = self.target
             # Check for relative pathnames
-            if not self.target.startswith('/'):
+            if not self.target.startswith("/"):
                 target = self._v_parent._g_join(self.target)
             return self._v_file._get_node(target)
         else:
             return None
 
-    def __getattribute__(self, attrname):
+    def __getattribute__(self, attrname: str) -> Any:
 
         # get attribute of the SoftLink itself
-        if (attrname in SoftLink._link_attrnames or
-                attrname[:3] in SoftLink._link_attrprefixes):
+        if (
+            attrname in SoftLink._link_attrnames
+            or attrname[:3] in SoftLink._link_attrprefixes
+        ):
             return object.__getattribute__(self, attrname)
 
         # get attribute of the target node
         elif not self._v_isopen:
-            raise tb.ClosedNodeError('the node object is closed')
+            raise tb.ClosedNodeError("the node object is closed")
         elif self.is_dangling():
             return None
         else:
@@ -239,52 +282,58 @@ class SoftLink(linkextension.SoftLink, Link):
                 # some node classes (e.g. Array) don't implement __getattr__()
                 return target_node.__getattr__(attrname)
 
-    def __setattr__(self, attrname, value):
+    def __setattr__(self, attrname: str, value: Any) -> None:
 
         # set attribute of the SoftLink itself
-        if (attrname in SoftLink._link_attrnames or
-                attrname[:3] in SoftLink._link_attrprefixes):
+        if (
+            attrname in SoftLink._link_attrnames
+            or attrname[:3] in SoftLink._link_attrprefixes
+        ):
             object.__setattr__(self, attrname, value)
 
         # set attribute of the target node
         elif not self._v_isopen:
-            raise tb.ClosedNodeError('the node object is closed')
+            raise tb.ClosedNodeError("the node object is closed")
         elif self.is_dangling():
             raise ValueError("softlink target does not exist")
         else:
             self.dereference().__setattr__(attrname, value)
 
-    def __getitem__(self, key):
-        """__getitem__ must be defined in the SoftLink class in order for array
-        indexing syntax to work"""
+    def __getitem__(self, key: str) -> Any:
+        """Getitem magic method.
 
+        The __getitem__ must be defined in the SoftLink class in order
+        for array indexing syntax to work.
+        """
         if not self._v_isopen:
-            raise tb.ClosedNodeError('the node object is closed')
+            raise tb.ClosedNodeError("the node object is closed")
         elif self.is_dangling():
             raise ValueError("softlink target does not exist")
         else:
             return self.dereference().__getitem__(key)
 
-    def __setitem__(self, key, value):
-        """__setitem__ must be defined in the SoftLink class in order for array
-        indexing syntax to work"""
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Setitem magic method.
 
+        The __setitem__ method must be defined in the SoftLink class
+        in order for array indexing syntax to work.
+        """
         if not self._v_isopen:
-            raise tb.ClosedNodeError('the node object is closed')
+            raise tb.ClosedNodeError("the node object is closed")
         elif self.is_dangling():
             raise ValueError("softlink target does not exist")
         else:
             self.dereference().__setitem__(key, value)
 
-    def is_dangling(self):
+    def is_dangling(self) -> bool:
+        """Return True if the link is dangling."""
         return not (self.dereference() in self._v_file)
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a short string representation of the link.
 
         Examples
         --------
-
         ::
 
             >>> f = tb.open_file('tables/tests/slink.h5')
@@ -293,15 +342,16 @@ class SoftLink(linkextension.SoftLink, Link):
             >>> f.close()
 
         """
-
         target = str(self.target)
         # Check for relative pathnames
-        if not self.target.startswith('/'):
+        if not self.target.startswith("/"):
             target = self._v_parent._g_join(self.target)
         closed = "" if self._v_isopen else "closed "
         dangling = "" if target in self._v_file else " (dangling)"
-        return (f"{closed}{self._v_pathname} ({self.__class__.__name__}) -> "
-                f"{self.target}{dangling}")
+        return (
+            f"{closed}{self._v_pathname} ({self.__class__.__name__}) -> "
+            f"{self.target}{dangling}"
+        )
 
 
 class ExternalLink(linkextension.ExternalLink, Link):
@@ -323,23 +373,28 @@ class ExternalLink(linkextension.ExternalLink, Link):
     """
 
     # Class identifier.
-    _c_classid = 'EXTERNALLINK'
+    _c_classid = "EXTERNALLINK"
 
-    def __init__(self, parentnode, name, target=None, _log=False):
+    def __init__(
+        self,
+        parentnode: Group,
+        name: str,
+        target: str | None = None,
+        _log: bool = False,
+    ) -> None:
         self.extfile = None
         """The external file handler, if the link has been dereferenced.
         In case the link has not been dereferenced yet, its value is
         None."""
         super().__init__(parentnode, name, target, _log)
 
-    def _get_filename_node(self):
+    def _get_filename_node(self) -> tuple[str, str]:
         """Return the external filename and nodepath from `self.target`."""
-
         # This is needed for avoiding the 'C:\\file.h5' filepath notation
-        filename, target = self.target.split(':/')
-        return filename, '/' + target
+        filename, target = self.target.split(":/")
+        return filename, "/" + target
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs) -> Node:
         """Dereference self.target and return the object.
 
         You can pass all the arguments supported by the :func:`open_file`
@@ -348,7 +403,6 @@ class ExternalLink(linkextension.ExternalLink, Link):
 
         Examples
         --------
-
         ::
 
             >>> f = tb.open_file('tables/tests/elink.h5')
@@ -362,44 +416,40 @@ class ExternalLink(linkextension.ExternalLink, Link):
             >>> f.close()
 
         """
-
         filename, target = self._get_filename_node()
 
         if not Path(filename).is_absolute():
-            # Resolve the external link with respect to the this
+            # Resolve the external link with respect to this
             # file's directory.  See #306.
-            filename = str(Path(self._v_file.filename).with_name(filename))
+            filename = str(Path(self._v_file.filename).parent / filename)
 
         if self.extfile is None or not self.extfile.isopen:
             self.extfile = tb.open_file(filename, **kwargs)
         else:
             # XXX: implement better consistency checks
             assert self.extfile.filename == filename
-            assert self.extfile.mode == kwargs.get('mode', 'r')
+            assert self.extfile.mode == kwargs.get("mode", "r")
 
         return self.extfile._get_node(target)
 
-    def umount(self):
+    def umount(self) -> None:
         """Safely unmount self.extfile, if opened."""
-
         extfile = self.extfile
         # Close external file, if open
         if extfile is not None and extfile.isopen:
             extfile.close()
             self.extfile = None
 
-    def _f_close(self):
+    def _f_close(self) -> None:
         """Especific close for external links."""
-
         self.umount()
         super()._f_close()
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a short string representation of the link.
 
         Examples
         --------
-
         ::
 
             >>> f = tb.open_file('tables/tests/elink.h5')
@@ -408,6 +458,7 @@ class ExternalLink(linkextension.ExternalLink, Link):
             >>> f.close()
 
         """
-
-        return (f"{self._v_pathname} ({self.__class__.__name__}) -> "
-                f"{self.target}")
+        return (
+            f"{self._v_pathname} ({self.__class__.__name__}) -> "
+            f"{self.target}"
+        )

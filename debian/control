@@ -27,13 +27,12 @@ Build-Depends: cython3,
                python3-ipython <!nodoc>,
                python3-numexpr (>= 2.8.7),
                python3-numpy,
-               python3-numpydoc <!nodoc>,
                python3-packaging,
                python3-sphinx <!nodoc>,
                python3-sphinx-rtd-theme <!nodoc>,
                python3-setuptools,
                zlib1g-dev
-Standards-Version: 4.6.2
+Standards-Version: 4.7.0
 Vcs-Browser: https://salsa.debian.org/science-team/pytables
 Vcs-Git: https://salsa.debian.org/science-team/pytables.git
 Homepage: https://www.pytables.org
@@ -95,6 +94,7 @@ Depends: ${misc:Depends},
          libjs-jquery-cookie
 Suggests: xpdf | pdf-viewer,
           www-browser
+Multi-Arch: foreign
 Description: ${source:Synopsis} (documentation)
  ${source:Extended-Description}
  .

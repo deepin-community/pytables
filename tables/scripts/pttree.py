@@ -4,93 +4,127 @@ Pass the flag -h to this for help on usage.
 
 """
 
-import os
+import sys
 import argparse
-from collections import defaultdict, deque
 import warnings
 from pathlib import Path
+from collections import defaultdict, deque
 
 import numpy as np
+
 import tables as tb
 
 
 def _get_parser():
     parser = argparse.ArgumentParser(
-        description='''
-        `pttree` is designed to give a quick overview of the contents of a
-        PyTables HDF5 file by printing a depth-indented list of nodes, similar
-        to the output of the Unix `tree` function.
-
-        It can also display the size, shape and compression states of
-        individual nodes, as well as summary information for the whole file.
-
-        For a more verbose output (including metadata), see `ptdump`.
-        ''')
-
-    parser.add_argument(
-        '-L', '--max-level', type=int, dest='max_depth',
-        help='maximum branch depth of tree to display (-1 == no limit)',
-    )
-    parser.add_argument(
-        '-S', '--sort-by', type=str, dest='sort_by',
-        help='artificially order nodes, can be either "size", "name" or "none"'
-    )
-    parser.add_argument(
-        '--print-size', action='store_true', dest='print_size',
-        help='print size of each node/branch',
-    )
-    parser.add_argument(
-        '--no-print-size', action='store_false', dest='print_size',
-    )
-    parser.add_argument(
-        '--print-shape', action='store_true', dest='print_shape',
-        help='print shape of each node',
-    )
-    parser.add_argument(
-        '--no-print-shape', action='store_false', dest='print_shape',
-    )
-    parser.add_argument(
-        '--print-compression', action='store_true', dest='print_compression',
-        help='print compression library(level) for each compressed node',
-    )
-    parser.add_argument(
-        '--no-print-compression', action='store_false',
-        dest='print_compression',
-    )
-    parser.add_argument(
-        '--print-percent', action='store_true', dest='print_percent',
-        help='print size of each node as a %% of the total tree size on disk',
-    )
-    parser.add_argument(
-        '--no-print-percent', action='store_false',
-        dest='print_percent',
-    )
-    parser.add_argument(
-        '--use-si-units', action='store_true', dest='use_si_units',
-        help='report sizes in SI units (1 MB == 10^6 B)',
-    )
-    parser.add_argument(
-        '--use-binary-units', action='store_false', dest='use_si_units',
-        help='report sizes in binary units (1 MiB == 2^20 B)',
+        description=(
+            "`pttree` is designed to give a quick overview of the contents "
+            "of a PyTables HDF5 file by printing a depth-indented list of "
+            "nodes, similar to the output of the Unix `tree` function. "
+            "It can also display the size, shape and compression states of "
+            "individual nodes, as well as summary information for the whole "
+            "file. "
+            "For a more verbose output (including metadata), see `ptdump`. "
+        ),
     )
 
-    parser.add_argument('src', metavar='filename[:nodepath]',
-                        help='path to the root of the tree structure')
+    parser.add_argument(
+        "-L",
+        "--max-level",
+        type=int,
+        dest="max_depth",
+        help="maximum branch depth of tree to display (-1 == no limit)",
+    )
+    parser.add_argument(
+        "-S",
+        "--sort-by",
+        type=str,
+        dest="sort_by",
+        help='artificially order nodes, can be either "size", "name" or "none"',
+    )
+    parser.add_argument(
+        "--print-size",
+        action="store_true",
+        dest="print_size",
+        help="print size of each node/branch",
+    )
+    parser.add_argument(
+        "--no-print-size",
+        action="store_false",
+        dest="print_size",
+    )
+    parser.add_argument(
+        "--print-shape",
+        action="store_true",
+        dest="print_shape",
+        help="print shape of each node",
+    )
+    parser.add_argument(
+        "--no-print-shape",
+        action="store_false",
+        dest="print_shape",
+    )
+    parser.add_argument(
+        "--print-compression",
+        action="store_true",
+        dest="print_compression",
+        help="print compression library(level) for each compressed node",
+    )
+    parser.add_argument(
+        "--no-print-compression",
+        action="store_false",
+        dest="print_compression",
+    )
+    parser.add_argument(
+        "--print-percent",
+        action="store_true",
+        dest="print_percent",
+        help="print size of each node as a %% of the total tree size on disk",
+    )
+    parser.add_argument(
+        "--no-print-percent",
+        action="store_false",
+        dest="print_percent",
+    )
+    parser.add_argument(
+        "--use-si-units",
+        action="store_true",
+        dest="use_si_units",
+        help="report sizes in SI units (1 MB == 10^6 B)",
+    )
+    parser.add_argument(
+        "--use-binary-units",
+        action="store_false",
+        dest="use_si_units",
+        help="report sizes in binary units (1 MiB == 2^20 B)",
+    )
 
-    parser.set_defaults(max_depth=1, sort_by="size", print_size=True,
-                        print_percent=True, print_shape=False,
-                        print_compression=False, use_si_units=False)
+    parser.add_argument(
+        "src",
+        metavar="filename[:nodepath]",
+        help="path to the root of the tree structure",
+    )
+
+    parser.set_defaults(
+        max_depth=1,
+        sort_by="size",
+        print_size=True,
+        print_percent=True,
+        print_shape=False,
+        print_compression=False,
+        use_si_units=False,
+    )
 
     return parser
 
 
 def main():
-
+    """Implement the main CLI interface."""
     parser = _get_parser()
     args = parser.parse_args()
 
     # Catch the files passed as the last arguments
-    src = args.__dict__.pop('src').rsplit(':', 1)
+    src = args.__dict__.pop("src").rsplit(":", 1)
     if len(src) == 1:
         filename, nodename = src[0], "/"
     else:
@@ -99,27 +133,32 @@ def main():
             # case where filename == "filename:" instead of "filename:/"
             nodename = "/"
 
-    with tb.open_file(filename, 'r') as f:
+    with tb.open_file(filename, "r") as f:
         tree_str = get_tree_str(f, nodename, **args.__dict__)
         print(tree_str)
 
     pass
 
 
-def get_tree_str(f, where='/', max_depth=-1, print_class=True,
-                 print_size=True, print_percent=True, print_shape=False,
-                 print_compression=False, print_total=True, sort_by=None,
-                 use_si_units=False):
-    """
-    Generate the ASCII string representing the tree structure, and the summary
-    info (if requested)
-    """
-
+def get_tree_str(
+    f,
+    where="/",
+    max_depth=-1,
+    print_class=True,
+    print_size=True,
+    print_percent=True,
+    print_shape=False,
+    print_compression=False,
+    print_total=True,
+    sort_by=None,
+    use_si_units=False,
+):
+    """Return a string representing the tree structure, and the summary info."""
     root = f.get_node(where)
     root._g_check_open()
     start_depth = root._v_depth
     if max_depth < 0:
-        max_depth = os.sys.maxint
+        max_depth = sys.maxsize
 
     b2h = bytes2human(use_si_units)
 
@@ -133,16 +172,16 @@ def get_tree_str(f, where='/', max_depth=-1, print_class=True,
     total_items = 0
 
     # defaultdicts for holding the cumulative branch sizes at each node
-    in_mem = defaultdict(lambda: 0)
-    on_disk = defaultdict(lambda: 0)
-    leaf_count = defaultdict(lambda: 0)
+    in_mem = defaultdict(int)
+    on_disk = defaultdict(int)
+    leaf_count = defaultdict(int)
 
     # keep track of node addresses within the HDF5 file so that we don't count
     # nodes with multiple references (i.e. hardlinks) multiple times
-    ref_count = defaultdict(lambda: 0)
-    ref_idx = defaultdict(lambda: 0)
+    ref_count = defaultdict(int)
+    ref_idx = defaultdict(int)
     hl_addresses = defaultdict(lambda: None)
-    hl_targets = defaultdict(lambda: '')
+    hl_targets = defaultdict(str)
 
     stack = deque(root)
     leaves = deque()
@@ -248,48 +287,52 @@ def get_tree_str(f, where='/', max_depth=-1, print_class=True,
             # if the address of this object has a ref_count > 1, it has
             # multiple hardlinks
             if ref_count[hl_addresses[path]] > 1:
-                name += ', addr=%i, ref=%i/%i' % (
-                    hl_addresses[path], ref_idx[path],
-                    ref_count[hl_addresses[path]]
+                name += ", addr=%i, ref=%i/%i" % (
+                    hl_addresses[path],
+                    ref_idx[path],
+                    ref_count[hl_addresses[path]],
                 )
 
             if isinstance(node, tb.link.Link):
-                labels.append('softlink --> %s' % node.target)
+                labels.append("softlink --> %s" % node.target)
 
             elif ref_idx[path] > 1:
-                labels.append('hardlink --> %s'
-                              % hl_targets[hl_addresses[path]])
+                labels.append(
+                    "hardlink --> %s" % hl_targets[hl_addresses[path]]
+                )
 
             elif isinstance(node, (tb.Array, tb.Table)):
 
                 if print_size:
-                    sizestr = 'mem={}, disk={}'.format(
-                        b2h(in_mem[path]), b2h(on_disk[path]))
+                    sizestr = "mem={}, disk={}".format(
+                        b2h(in_mem[path]), b2h(on_disk[path])
+                    )
                     if print_percent:
-                        sizestr += f' [{ratio:5.1%}]'
+                        sizestr += f" [{ratio:5.1%}]"
                     labels.append(sizestr)
 
                 if print_shape:
-                    labels.append('shape=%s' % repr(node.shape))
+                    labels.append("shape=%s" % repr(node.shape))
 
                 if print_compression:
                     lib = node.filters.complib
                     level = node.filters.complevel
                     if level:
-                        compstr = '%s(%i)' % (lib, level)
+                        compstr = "%s(%i)" % (lib, level)
                     else:
-                        compstr = 'None'
-                    labels.append('compression=%s' % compstr)
+                        compstr = "None"
+                    labels.append("compression=%s" % compstr)
 
             # if we're at our max recursion depth, we'll print summary
             # information for this branch
             elif depth == max_depth:
-                itemstr = '... %i leaves' % leaf_count[path]
+                itemstr = "... %i leaves" % leaf_count[path]
                 if print_size:
-                    itemstr += ', mem={}, disk={}'.format(
-                        b2h(in_mem[path]), b2h(on_disk[path]))
+                    itemstr += ", mem={}, disk={}".format(
+                        b2h(in_mem[path]), b2h(on_disk[path])
+                    )
                 if print_percent:
-                    itemstr += f' [{ratio:5.1%}]'
+                    itemstr += f" [{ratio:5.1%}]"
                 labels.append(itemstr)
 
             # create a PrettyTree for this node, if one doesn't exist already
@@ -297,23 +340,24 @@ def get_tree_str(f, where='/', max_depth=-1, print_class=True,
                 pretty.update({path: PrettyTree()})
             pretty[path].name = name
             pretty[path].labels = labels
-            if sort_by == 'size':
+            if sort_by == "size":
                 # descending size order
                 pretty[path].sort_by = -ratio
-            elif sort_by == 'name':
+            elif sort_by == "name":
                 pretty[path].sort_by = node._v_name
             else:
                 # natural order
-                if path == '/':
+                if path == "/":
                     # root is not in root._v_children
                     pretty[path].sort_by = 0
                 else:
-                    pretty[path].sort_by = list(parent._v_children.values(
-                                                                )).index(node)
+                    pretty[path].sort_by = list(
+                        parent._v_children.values()
+                    ).index(node)
 
             # exclude root node or we'll get infinite recursions (since '/' is
             # the parent of '/')
-            if path != '/':
+            if path != "/":
 
                 # create a PrettyTree for the parent of this node, if one
                 # doesn't exist already
@@ -328,34 +372,32 @@ def get_tree_str(f, where='/', max_depth=-1, print_class=True,
             # the nodes at this level before going up a level in the tree
             stack.appendleft(parent)
 
-    out_str = '\n' + '-' * 60 + '\n' * 2
-    out_str += str(pretty[root._v_pathname]) + '\n' * 2
+    out_str = "\n" + "-" * 60 + "\n" * 2
+    out_str += str(pretty[root._v_pathname]) + "\n" * 2
 
     if print_total:
         avg_ratio = total_on_disk / total_in_mem
         fsize = Path(f.filename).stat().st_size
 
-        out_str += '-' * 60 + '\n'
-        out_str += 'Total branch leaves:    %i\n' % total_items
-        out_str += 'Total branch size:      {} in memory, {} on disk\n'.format(
-            b2h(total_in_mem), b2h(total_on_disk))
-        out_str += 'Mean compression ratio: %.2f\n' % avg_ratio
-        out_str += 'HDF5 file size:         %s\n' % b2h(fsize)
-        out_str += '-' * 60 + '\n'
+        out_str += "-" * 60 + "\n"
+        out_str += "Total branch leaves:    %i\n" % total_items
+        out_str += "Total branch size:      {} in memory, {} on disk\n".format(
+            b2h(total_in_mem), b2h(total_on_disk)
+        )
+        out_str += "Mean compression ratio: %.2f\n" % avg_ratio
+        out_str += "HDF5 file size:         %s\n" % b2h(fsize)
+        out_str += "-" * 60 + "\n"
 
     return out_str
 
 
 class PrettyTree:
+    """Pretty ASCII representation of a recursive tree structure.
 
-    """
-
-    A pretty ASCII representation of a recursive tree structure. Each node can
-    have multiple labels, given as a list of strings.
+    Each node can have multiple labels, given as a list of strings.
 
     Example:
     --------
-
         A = PrettyTree('A', labels=['wow'])
         B = PrettyTree('B', labels=['such tree'])
         C = PrettyTree('C', children=[A, B])
@@ -385,6 +427,7 @@ class PrettyTree:
         self.sort_by = sort_by
 
     def add_child(self, child):
+        """Add a child to the tree."""
         # some basic checks to help to avoid infinite recursion
         assert child is not self
         assert self not in child.children
@@ -392,36 +435,37 @@ class PrettyTree:
             self.children.append(child)
 
     def tree_lines(self):
+        """Generate lines of teh string representation of a tree."""
         yield self.name
         for label in self.labels:
-            yield '   ' + label
+            yield "   " + label
         children = sorted(self.children, key=(lambda c: c.sort_by))
         last = children[-1] if children else None
         for child in children:
-            prefix = '`--' if child is last else '+--'
+            prefix = "`--" if child is last else "+--"
             for line in child.tree_lines():
                 yield prefix + line
-                prefix = '   ' if child is last else '|  '
+                prefix = "   " if child is last else "|  "
 
     def __str__(self):
         return "\n".join(self.tree_lines())
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} at 0x{id(self):x}>'
+        return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
 
 def bytes2human(use_si_units=False):
-
+    """Return the string representation of the number of bytes with units."""
     if use_si_units:
-        prefixes = 'TB', 'GB', 'MB', 'kB', 'B'
-        values = 1E12, 1E9, 1E6, 1E3, 1
+        prefixes = "TB", "GB", "MB", "kB", "B"
+        values = 1e12, 1e9, 1e6, 1e3, 1
     else:
-        prefixes = 'TiB', 'GiB', 'MiB', 'KiB', 'B'
-        values = 2 ** 40, 2 ** 30, 2 ** 20, 2 ** 10, 1
+        prefixes = "TiB", "GiB", "MiB", "KiB", "B"
+        values = 2**40, 2**30, 2**20, 2**10, 1
 
     def b2h(nbytes):
 
-        for (prefix, value) in zip(prefixes, values):
+        for prefix, value in zip(prefixes, values):
             scaled = nbytes / value
             if scaled >= 1:
                 break
@@ -431,25 +475,31 @@ def bytes2human(use_si_units=False):
     return b2h
 
 
-def make_test_file(prefix='/tmp'):
-    f = tb.open_file(str(Path(prefix) / 'test_pttree.hdf5'), 'w')
+def make_test_file(prefix="/tmp"):
+    """Create a test file."""
+    f = tb.open_file(str(Path(prefix) / "test_pttree.hdf5"), "w")
 
-    g1 = f.create_group('/', 'group1')
-    g1a = f.create_group(g1, 'group1a')
-    g1b = f.create_group(g1, 'group1b')
+    g1 = f.create_group("/", "group1")
+    g1a = f.create_group(g1, "group1a")
+    g1b = f.create_group(g1, "group1b")
 
-    filters = tb.Filters(complevel=5, complib='bzip2')
+    filters = tb.Filters(complevel=5, complib="bzip2")
 
     for gg in g1a, g1b:
-        f.create_carray(gg, 'zeros128b', obj=np.zeros(32, dtype=np.float64),
-                        filters=filters)
-        f.create_carray(gg, 'random128b', obj=np.random.rand(32),
-                        filters=filters)
+        f.create_carray(
+            gg,
+            "zeros128b",
+            obj=np.zeros(32, dtype=np.float64),
+            filters=filters,
+        )
+        f.create_carray(
+            gg, "random128b", obj=np.random.rand(32), filters=filters
+        )
 
-    g2 = f.create_group('/', 'group2')
+    g2 = f.create_group("/", "group2")
 
-    f.create_soft_link(g2, 'softlink_g1_z128', '/group1/group1a/zeros128b')
-    f.create_hard_link(g2, 'hardlink_g1a_z128', '/group1/group1a/zeros128b')
-    f.create_hard_link(g2, 'hardlink_g1a', '/group1/group1a')
+    f.create_soft_link(g2, "softlink_g1_z128", "/group1/group1a/zeros128b")
+    f.create_hard_link(g2, "hardlink_g1a_z128", "/group1/group1a/zeros128b")
+    f.create_hard_link(g2, "hardlink_g1a", "/group1/group1a")
 
     return f

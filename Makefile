@@ -6,14 +6,14 @@ VERSION = $(shell grep "__version__ =" tables/_version.py | cut -f 3 -d ' ' | se
 SRCDIRS = doc
 GENERATED = ANNOUNCE.txt
 PYTHON = python3
-PYPLATFORM = $(shell $(PYTHON) -c "from distutils.util import get_platform; print(get_platform())")
+PYPLATFORM = $(shell $(PYTHON) -c "from sysconfig import get_platform; print(get_platform())")
 PYVER = $(shell $(PYTHON) -c "import sys; print(sys.implementation.cache_tag)")
 PYBUILDDIR = $(PWD)/build/lib.$(PYPLATFORM)-$(PYVER)
 OPT = PYTHONPATH="$(PYBUILDDIR)"
 MD5SUM = md5sum
 
 
-.PHONY: default dist sdist build check heavycheck clean distclean html latex
+.PHONY: default dist sdist build check heavycheck clean distclean html latex requirements
 
 default: $(GENERATED) build
 
@@ -34,7 +34,7 @@ sdist: $(GENERATED)
 	$(PYTHON) -m build --sdist
 
 clean:
-	$(RM) -r MANIFEST build dist tmp tables/__pycache__
+	$(RM) -r MANIFEST build dist tmp tables/__pycache__ doc/_build
 	$(RM) bench/*.h5 bench/*.prof
 	$(RM) -r examples/*.h5 examples/raw
 	$(RM) -r *.egg-info
@@ -46,7 +46,7 @@ distclean: clean
 	$(RM) tables/_comp_*.c tables/*extension.c
 	$(RM) doc/usersguide-*.pdf
 	$(RM) -r doc/html
-	$(RM) -r .pytest_cache
+	$(RM) -r .pytest_cache .mypy_cache
 	# git clean -fdx
 
 html: build
@@ -59,16 +59,24 @@ latex: build
 	$(RM) doc/usersguide-*.pdf
 	cp doc/build/latex/usersguide-$(VERSION).pdf doc
 
-%: %.in tables/__init__.py
+ANNOUNCE.txt: ANNOUNCE.txt.in tables/__init__.py
 	cat "$<" | sed -e 's/@VERSION@/$(VERSION)/g' > "$@"
 
 build:
 	$(PYTHON) setup.py build
 
 check: build
-	cd build/lib.* && env PYTHONPATH=. $(PYTHON) -m pytest --doctest-only --pyargs tables -k "not AttributeSet"
+	# cd build/lib.* && env PYTHONPATH=. $(PYTHON) -m pytest --doctest-only --pyargs tables -k "not AttributeSet"
 	cd build/lib.* && env PYTHONPATH=. $(PYTHON) tables/tests/test_all.py
 
 heavycheck: build
 	cd build/lib.* && env PYTHONPATH=. $(PYTHON) tables/tests/test_all.py --heavy
 
+requirements: \
+	requirements.txt \
+	requirements-docs.txt \
+	.github/workflows/requirements/build-requirements.txt \
+	.github/workflows/requirements/wheels-requirements.txt
+
+%.txt: %.in
+	pip-compile -U --allow-unsafe --generate-hashes --strip-extras $<

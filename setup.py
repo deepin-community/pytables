@@ -12,14 +12,13 @@ import platform
 import tempfile
 import textwrap
 import subprocess
+from typing import NamedTuple
 from pathlib import Path
-from typing import NamedTuple, Optional
 
 # Using ``setuptools`` enables lots of goodies
 from setuptools import setup, Extension
-from setuptools.command.build_ext import build_ext
 from packaging.version import Version
-
+from setuptools.command.build_ext import build_ext
 
 # The name for the pkg-config utility
 PKG_CONFIG = "pkg-config"
@@ -111,21 +110,23 @@ def get_blosc2_directories():
             runtime_path = basepath.parent.joinpath(path).resolve()
             if not runtime_path.is_file():
                 raise FileNotFoundError(
-                    f"File does not exixts: {runtime_path}"
+                    f"File does not exists: {runtime_path}"
                 )
             runtime_path = runtime_path.parent.resolve()
         elif fnmatch.fnmatch(path, "**/libblosc2*"):
             library_path = basepath.parent.joinpath(path).resolve()
             if not library_path.is_file():
                 raise FileNotFoundError(
-                    f"File does not exixts: {library_path}"
+                    f"File does not exists: {library_path}"
                 )
             library_path = library_path.parent.resolve()
-        elif fnmatch.fnmatch(path, "**/include/blosc2.h"):
+        elif fnmatch.fnmatch(path, "**/include/blosc2.h") or fnmatch.fnmatch(
+            path, "include/blosc2.h"
+        ):
             include_path = basepath.parent.joinpath(path).resolve()
             if not include_path.is_file():
                 raise FileNotFoundError(
-                    f"File does not exixts: {include_path}"
+                    f"File does not exists: {include_path}"
                 )
             include_path = include_path.parent.resolve()
 
@@ -240,12 +241,12 @@ class BuildExtensions(build_ext):
 
 
 class DefaultDirs(NamedTuple):
-    header: Optional[Path] = None
-    library: Optional[Path] = None
-    runtime: Optional[Path] = None
+    header: Path | None = None
+    library: Path | None = None
+    runtime: Path | None = None
 
 
-def get_default_dirs(conda_prefix: Optional[Path] = None) -> DefaultDirs:
+def get_default_dirs(conda_prefix: Path | None = None) -> DefaultDirs:
     # Order:
     # * C/CXX flags
     # * conda prefix
@@ -279,9 +280,7 @@ def get_default_dirs(conda_prefix: Optional[Path] = None) -> DefaultDirs:
         _archs = ("lib64", "lib")
         # conda prefix
         if conda_prefix:
-            library_dirs.extend(
-                conda_prefix / _arch for _arch in _archs
-            )
+            library_dirs.extend(conda_prefix / _arch for _arch in _archs)
         # hardcoded system paths
         library_dirs.extend(
             _tree / _arch for _tree in prefix_paths for _arch in _archs
@@ -294,6 +293,7 @@ def get_default_dirs(conda_prefix: Optional[Path] = None) -> DefaultDirs:
         runtime_dirs = []  # look for DLL files in ``%PATH%``
         if conda_prefix:
             runtime_dirs.append(conda_prefix / "Library")
+            header_dirs.append(conda_prefix / "Library" / "include")
         runtime_dirs.extend(
             Path(_path) for _path in os.environ["PATH"].split(";")
         )
@@ -304,9 +304,7 @@ def get_default_dirs(conda_prefix: Optional[Path] = None) -> DefaultDirs:
             Path(sys.prefix) / "Lib" / "site-packages" / "tables"
         )
 
-    return DefaultDirs(
-        header_dirs, library_dirs, runtime_dirs
-    )
+    return DefaultDirs(header_dirs, library_dirs, runtime_dirs)
 
 
 class BasePackage:
@@ -358,8 +356,11 @@ class BasePackage:
         # (The argument is accepted for compatibility with previous
         # methods.)
 
+        # Try just library name, relying on the OS search path.
+        # This fails on macOS.
         # dlopen() won't tell us where the file is, just whether
         # success occurred, so this returns True instead of a filename
+        # Try this before the absolute path search below: A Valentino
         for prefix in self._runtime_prefixes:
             for suffix in self._runtime_suffixes:
                 try:
@@ -368,6 +369,24 @@ class BasePackage:
                     pass
                 else:
                     return True
+
+        # If the library was not found by name alone, try absolute pathnames.
+        # In this case, we can return the path, rather than just True.
+        for location in locations:
+            for prefix in self._runtime_prefixes:
+                for suffix in self._runtime_suffixes:
+                    abs_path = f"{location}/{prefix}{self.runtime_name}{suffix}"
+                    # Debug: print("find_runtime_path() trying ", abs_path)
+                          
+                    try:
+                        ctypes.CDLL(abs_path)
+                    except OSError:
+                        pass
+                    else:
+                        # Returning path might foul the logic in caller
+                        # return abs_path
+                        # Be consistent with name-only search above
+                        return True
 
     def _pkg_config(self, flags):
         try:
@@ -456,12 +475,25 @@ class BasePackage:
 
         directories = [None, None, None]  # headers, libraries, runtime
         for idx, (name, find_path, default_dirs) in enumerate(dirdata):
-            path = find_path(
+            use_locations = (
                 locations
                 or pkgconfig_dirs[idx]
                 or hook_dirs[idx]
                 or default_dirs
             )
+            # pkgconfig does not list bin/ as the runtime dir
+            if (
+                name == "blosc"  # blosc
+                and CONDA_PREFIX  # conda
+                and sys.platform.startswith("win")  # windows
+                and idx == 2  # runtime
+                and len(use_locations) == 1  # only one location
+                and use_locations[0].parts[-1] == "lib"  # misnamed
+            ):
+                use_locations = list(use_locations)
+                use_locations[0] = use_locations[0].parent / "bin"
+                print(f"Patching runtime dir: {str(use_locations[0])}")
+            path = find_path(use_locations)
             if path:
                 if path is True:
                     directories[idx] = True
@@ -482,7 +514,8 @@ class BasePackage:
                     directories[idx] = Path(path[: path.rfind(name)])
                 else:
                     directories[idx] = Path(path).parent
-
+            #else:
+            #    print("Warning: path is not set.")
         return tuple(directories)
 
 
@@ -495,9 +528,9 @@ class PosixPackage(BasePackage):
 
 
 class WindowsPackage(BasePackage):
-    _library_prefixes = [""]
+    _library_prefixes = ["", "lib"]
     _library_suffixes = [".lib"]
-    _runtime_prefixes = [""]
+    _runtime_prefixes = ["", "lib"]
     _runtime_suffixes = [".dll"]
 
     # lookup in '.' seems necessary for LZO2
@@ -530,13 +563,6 @@ if __name__ == "__main__":
         print("cpuinfo failed, assuming no CPU features:", exc)
         cpu_flags = []
 
-    # The minimum required versions
-    # Keep in sync with ``project.requires-python`` in ``pyproject.toml``.
-    min_python_version = (3, 8)
-    # Check for Python
-    if sys.version_info < min_python_version:
-        exit_with_error("You need Python %s or greater to install PyTables!"
-                        % '.'.join(str(v) for v in min_python_version))
     print(f"* Using Python {sys.version.splitlines()[0]}")
 
     try:
@@ -601,7 +627,7 @@ if __name__ == "__main__":
             CFLAGS = val.split()
         elif key == "--debug":
             debug = True
-            # Don't delete this argument. It maybe useful for distutils
+            # Don't delete this argument. It may be useful for distutils
             # when adding more flags later on
             continue
         elif key == "--use-pkgconfig":
@@ -630,7 +656,7 @@ if __name__ == "__main__":
 
     # Gcc 4.0.1 on Mac OS X 10.4 does not seem to include the default
     # header and library paths.  See ticket #18.
-    if sys.platform.lower().startswith("darwin"):
+    if sys.platform.lower().startswith("darwin") or CONDA_PREFIX:
         inc_dirs.extend(default_dirs.header)
         lib_dirs.extend(default_dirs.library)
 
@@ -648,13 +674,18 @@ if __name__ == "__main__":
     elif os.name == "nt":
         _Package = WindowsPackage
         _platdep = {  # package tag -> platform-dependent components
+            # Library name, runtime name
             "HDF5": ["hdf5", "hdf5"],
             "LZO2": ["lzo2", "lzo2"],
             "LZO": ["liblzo", "lzo1"],
-            "BZ2": ["bzip2", "bzip2"],
+            "BZ2": ["bz2", "bz2"],
             "BLOSC": ["blosc", "blosc"],
             "BLOSC2": ["blosc2", "blosc2"],
         }
+        # conda recently got rid of bz2.dll in favor of libbz2.dll
+        # https://github.com/conda-forge/bzip2-feedstock/pull/24#pullrequestreview-2178290795
+        if CONDA_PREFIX:
+            _platdep["BZ2"] = ["libbz2", "libbz2"]
 
         # Copy the next DLL's to binaries by default.
         dll_files = [
@@ -736,7 +767,10 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------
 
-    def_macros = [("NDEBUG", 1)]
+    def_macros = [
+        ("NDEBUG", 1),
+        ("NPY_TARGET_VERSION", "NPY_1_20_API_VERSION"),
+    ]
 
     # Define macros for Windows platform
     if os.name == "nt":
@@ -775,10 +809,12 @@ if __name__ == "__main__":
 
     # Force the 1.10.x HDF5 API even if the library as been compiled to use the
     # 1.6.x API by default
-    CFLAGS.extend([
-        "-DH5_USE_110_API",
-        "-DH5Rdereference_vers=2",
-    ])
+    CFLAGS.extend(
+        [
+            "-DH5_USE_110_API",
+            "-DH5Rdereference_vers=2",
+        ]
+    )
 
     # H5Oget_info_by_name seems to have performance issues (see gh-402), so we
     # need to use teh deprecated H5Gget_objinfo function
@@ -833,13 +869,19 @@ if __name__ == "__main__":
                 package.target_function,
                 includes=(package.header_name + ".h",),
                 libraries=(package.library_name,),
+                include_dirs=[str(d) for d in inc_dirs],
+                library_dirs=[str(d) for d in lib_dirs],
             )
 
         if not (hdrdir and libdir):
+            err_msg = (
+                f"Could not find a local {package.name} installation headers "
+                f"({hdrdir=}) and/or libdir ({libdir=})"
+            )
             if package.tag in ["HDF5", "BLOSC2"]:  # these are compulsory!
                 pname, ptag = package.name, package.tag
                 exit_with_error(
-                    f"Could not find a local {pname} installation.",
+                    f"{err_msg}. ",
                     f"You may need to explicitly state where your local "
                     f"{pname} headers and library can be found by setting "
                     f"the ``{ptag}_DIR`` environment variable or by using "
@@ -847,15 +889,9 @@ if __name__ == "__main__":
                 )
             elif package.tag == "BLOSC":
                 # this is optional, but comes with sources
-                print(
-                    f"* Could not find {package.name} headers and library; "
-                    f"using internal sources."
-                )
+                print(f"* {err_msg}; using internal sources.")
             else:
-                print(
-                    f"* Could not find {package.name} headers and library; "
-                    f"disabling support for it."
-                )
+                print(f"* {err_msg}; disabling support for it.")
 
             continue  # look for the next library
 
@@ -941,12 +977,19 @@ if __name__ == "__main__":
 
                 else:
                     copy_libs += ["libblosc2.dll"]
-                    dll_dir = "C:\\Miniconda\\envs\\build\\Library\\bin"
+                    dll_dir = f"{CONDA_PREFIX}\\Library\\bin"
                     # Copy dlls when producing the wheels in CI
                     if "bdist_wheel" in sys.argv and os.path.exists(dll_dir):
-                        shutil.copy(
-                            libdir.parent / "bin" / "libblosc2.dll", dll_dir
-                        )
+                        # If building a wheel and Conda in use, these could be the
+                        # same path. Indicative that the ``rundir`` check is probably
+                        # not sufficient above, but easy enough to guard against
+                        # trying to copy a file to its current location
+                        # (thereby avoiding a "are the same file" shutil error).
+                        if Path(dll_dir) != libdir.parent / "bin":
+                            shutil.copy(
+                                libdir.parent / "bin" / "libblosc2.dll",
+                                dll_dir,
+                            )
                     else:
                         shutil.copy(
                             libdir.parent / "bin" / "libblosc2.dll", "tables"
